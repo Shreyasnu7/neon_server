@@ -7,6 +7,42 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Any
 import asyncio
+import json
+from pathlib import Path
+from threading import Lock
+
+STORAGE_FILE = Path("storage.json")
+_db_lock = Lock()
+
+# Default structures if no file exists
+DEFAULT_DB = {
+    "users": {},   # username -> {username, password_hash, drones: []}
+    "drones": {},  # id -> {id, name, model}
+    "logs": {}     # id -> [logs]
+}
+
+def load_storage():
+    if STORAGE_FILE.exists():
+        try:
+            with STORAGE_FILE.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            # If corrupt, fallback to defaults
+            return DEFAULT_DB.copy()
+    else:
+        return DEFAULT_DB.copy()
+
+def save_storage(db):
+    # Use a lock to avoid concurrent writes
+    with _db_lock:
+        with STORAGE_FILE.open("w", encoding="utf-8") as f:
+            json.dump(db, f, indent=2)
+
+# load persisted storage at startup (will create storage.json with DEFAULT_DB if missing)
+_storage = load_storage()
+USERS = _storage.get("users", {})
+DRONES = _storage.get("drones", {})
+LOGS = _storage.get("logs", {})
 
 app = FastAPI(title="Neon Drone Relay")
 
@@ -50,11 +86,25 @@ class FlightLogIn(BaseModel):
 async def health():
     return {"ok": True}
 
+import hashlib   # add this near the top with your imports if not already present
+
 @app.post("/login")
 async def login(payload: LoginIn):
-    # Very simple auth: accept any username/password for now
+    # simple auth: check hashed password
+    user = USERS.get(payload.username)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    password_hash = hashlib.sha256(payload.password.encode()).hexdigest()
+    if password_hash != user.get("password_hash"):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
     token = str(uuid.uuid4())
-    USERS[payload.username] = token
+    # store token and persist
+    user["token"] = token
+    _storage["users"] = USERS
+    save_storage(_storage)
+
     return {"token": token}
 
 @app.post("/drones")
@@ -62,7 +112,42 @@ async def add_drone(payload: RegisterDroneIn, token: str = ""):
     did = str(uuid.uuid4())
     DRONES[did] = {"id": did, "name": payload.name, "model": payload.model}
     LOGS[did] = []
+
+    # Optionally attach to user if token -> username mapping exists
+    # e.g. find username by token and append: USERS[username]["drones"].append(did)
+
+    # persist
+    _storage["drones"] = DRONES
+    _storage["logs"] = LOGS
+    save_storage(_storage)
+
     return {"id": did, "name": payload.name}
+
+import hashlib
+
+@app.post("/signup")
+async def signup(data: LoginIn):
+    username = data.username
+    password = data.password
+
+    # check if user exists
+    if username in USERS:
+        raise HTTPException(status_code=400, detail="User already exists")
+
+    # store hashed password (don't store plaintext)
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+
+    USERS[username] = {
+        "username": username,
+        "password_hash": password_hash,
+        "drones": []
+    }
+
+    # persist
+    _storage["users"] = USERS
+    save_storage(_storage)
+
+    return {"ok": True, "message": "User created"}
 
 @app.get("/drones")
 async def list_drones():
