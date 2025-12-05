@@ -1,0 +1,12 @@
+{
+  "users": {
+    "test": {
+      "username": "test",
+      "password_hash": "a665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3",
+      "drones": [],
+      "token": "deba8720-0682-4f8c-91e2-dcacc178cb71"
+    }
+  },
+  "drones": {},
+  "logs": {}
+}
