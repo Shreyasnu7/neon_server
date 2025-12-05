@@ -101,19 +101,18 @@ async def signup(user: UserIn):
 
 
 @app.post("/login")
-async def login(data: LoginIn):
-    user = db["users"].get(data.username)
+def login(user: UserIn):
+    db_user = db["users"].get(user.username)
 
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+    if not db_user:
+        raise HTTPException(status_code=401, detail="Invalid username")
 
-    incoming_hash = hashlib.sha256(data.password.encode()).hexdigest()
+    if hash_password(user.password) != db_user["password_hash"]:
+        raise HTTPException(status_code=401, detail="Wrong password")
 
-    if incoming_hash != user["password"]:
-        raise HTTPException(status_code=401, detail="Invalid password")
+    token = create_token(user.username)
 
-    token = f"{data.username}-valid-token"
-    return {"token": token}
+    return {"ok": True, "token": token, "username": user.username}
 
 
 # ---------------- DRONES ----------------
