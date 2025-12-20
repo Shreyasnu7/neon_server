@@ -5,7 +5,7 @@ from api_schemas import TextRequest, VideoLinkRequest
 from utils import save_json, new_job
 from fastapi import APIRouter
 from cloud_ai.plan_generator import PlanGenerator
-from server.cloud_ai.llm import ask_ai  # your existing LLM wrapper
+from cloud_ai.llm import ask_ai  # your existing LLM wrapper
 
 
 planner = PlanGenerator()
