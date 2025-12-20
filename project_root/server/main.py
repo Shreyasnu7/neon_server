@@ -3,12 +3,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.ai_router import ai_router
-from app.memory_router import memory_router
-from app.plan_router import plan_router
-from app.ws_router import ws_router
+from ai_router import ai_router
+from memory_router import memory_router
+from plan_router import plan_router
+from ws_router import ws_router
 
-from server.ai_command_router import router as ai_command_router
+
+from ai_command_router import router as ai_command_router
 
 
 app = FastAPI(
