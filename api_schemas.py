@@ -1,7 +1,7 @@
 # api_schemas.py
 # server/api_schemas.py
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 
 
