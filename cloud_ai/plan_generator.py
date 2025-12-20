@@ -1,6 +1,6 @@
 # server/cloud_ai/plan_generator.py
 
-from server.api_schemas import DronePlan
+from api_schemas import DronePlan
 
 
 class PlanGenerator:

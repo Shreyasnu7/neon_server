@@ -3,7 +3,7 @@ import os, json, uuid
 from fastapi import APIRouter
 from api_schemas import AIPlan
 from fastapi import APIRouter
-from server.api_schemas import DronePlan
+from api_schemas import DronePlan
 
 router = APIRouter()
 
