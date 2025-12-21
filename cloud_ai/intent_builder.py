@@ -1,6 +1,6 @@
 # server/cloud_ai/intent_builder.py
 
-from cloud_ai.intent_schema import (
+from cloud_ai.contracts.intent_schema import (
     CinematicIntent,
     EmotionalModel,
     CameraPlan,

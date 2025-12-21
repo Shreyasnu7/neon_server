@@ -1,6 +1,6 @@
 # server/cloud_ai/intent_validator.py
 
-from cloud_ai.intent_schema import CinematicIntent
+from cloud_ai.contracts.intent_schema import CinematicIntent
 
 
 class IntentValidator:
