@@ -4,3 +4,5 @@ pydantic
 python-multipart
 websockets
 requests
+google-generativeai
+openai

@@ -109,11 +109,17 @@ async def run_vision_loop(websocket, director=None, master_brain=None, tone_engi
         if director and primary_target:
              director_update = {"status": "tracking", "target_lock": True}
 
-        # 3. Send Insight to Cloud
+        # 3. Send Insight + Video to Cloud
         now = time.time()
-        if (detections or director_update) and (now - last_send > 0.1): # Faster update (10Hz)
-            payload = {
-                "type": "vision_update",
+        if (now - last_send > 0.1): # 10 FPS Limit
+             # Encode Frame
+             _, buffer = cv2.imencode('.jpg', display_frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+             import base64
+             b64_frame = base64.b64encode(buffer).decode('utf-8')
+
+             payload = {
+                "type": "video_frame", # Renamed for clarity
+                "image": b64_frame,    # The raw visual
                 "detections": detections,
                 "director": director_update,
                 "timestamp": now

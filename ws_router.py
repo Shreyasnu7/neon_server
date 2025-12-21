@@ -1,18 +1,91 @@
 # ws_router.py
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
+from typing import Dict, List
 
 ws_router = APIRouter()
 
+class ConnectionManager:
+    def __init__(self):
+        # Store active connections
+        self.mobile_clients: List[WebSocket] = []
+        self.drone_client: WebSocket | None = None
+
+    async def connect_mobile(self, websocket: WebSocket):
+        await websocket.accept()
+        self.mobile_clients.append(websocket)
+        print(f"📱 Mobile Client Connected. Total: {len(self.mobile_clients)}")
+
+    async def connect_drone(self, websocket: WebSocket):
+        await websocket.accept()
+        self.drone_client = websocket
+        print("🚁 Drone (Laptop) Connected!")
+
+    def disconnect_mobile(self, websocket: WebSocket):
+        if websocket in self.mobile_clients:
+            self.mobile_clients.remove(websocket)
+            print("📱 Mobile Client Disconnected")
+
+    def disconnect_drone(self):
+        self.drone_client = None
+        print("🚁 Drone Disconnected")
+
+    async def broadcast_to_mobile(self, message: str):
+        """Relay message from Drone to ALL Mobile Clients"""
+        for connection in self.mobile_clients:
+            try:
+                await connection.send_text(message)
+            except Exception as e:
+                print(f"Error broadcasting to mobile: {e}")
+
+    async def send_to_drone(self, message: str):
+        """Relay message from Mobile to Drone"""
+        if self.drone_client:
+            try:
+                await self.drone_client.send_text(message)
+            except Exception as e:
+                print(f"Error sending to drone: {e}")
+
+manager = ConnectionManager()
+
 @ws_router.websocket("/connect/{client_id}")
-async def connect_client(websocket: WebSocket, client_id: str):
-    await websocket.accept()
-    print(f"WS connected: {client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    """
+    Main Relay Logic:
+    - If client_id == 'laptop_vision', it's the Drone.
+    - If client_id == 'mobile_app' (or others), it's the App.
+    """
+    is_drone = (client_id == "laptop_vision")
+    
+    if is_drone:
+        await manager.connect_drone(websocket)
+    else:
+        await manager.connect_mobile(websocket)
 
     try:
         while True:
-            msg = await websocket.receive_text()
-            print(f"[{client_id}] -> {msg}")
-            await websocket.send_text(json.dumps({"ack": msg}))  # JSON response
+            data = await websocket.receive_text()
+            
+            # ROUTING LOGIC
+            if is_drone:
+                # 1. Drone -> App (Telemetry, Video)
+                # Wraps raw data in standard packet if needed, or passes through
+                # Assuming Laptop sends valid JSON
+                await manager.broadcast_to_mobile(data)
+                
+            else:
+                # 2. App -> Drone (Commands, Joysticks)
+                # App sends: {"type": "joystick", "payload": {...}}
+                await manager.send_to_drone(data)
+                
     except WebSocketDisconnect:
-        print(f"WS disconnected: {client_id}")
+        if is_drone:
+            manager.disconnect_drone()
+        else:
+            manager.disconnect_mobile(websocket)
+    except Exception as e:
+        print(f"WS Error [{client_id}]: {e}")
+        if is_drone:
+            manager.disconnect_drone()
+        else:
+            manager.disconnect_mobile(websocket)

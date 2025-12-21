@@ -41,7 +41,8 @@ class CloudOrchestrator:
             
             raw_intent = self.intent_reasoner.reason(
                 user_text=user_text,
-                memory_context={"vision": vision_context} if vision_context else {}
+                memory_context={"vision": vision_context} if vision_context else {},
+                provider=payload.get("provider", "gemini")
             )
         else:
             # Fallback if no LLM client passed (or mock)

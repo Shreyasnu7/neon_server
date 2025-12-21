@@ -21,6 +21,7 @@ class ShotIntentReasoner:
         image_refs: list[str] | None = None,
         video_refs: list[str] | None = None,
         memory_context: Dict[str, Any] | None = None,
+        provider: str = "gemini",
     ) -> Dict[str, Any]:
         """
         Perform unrestricted cinematic reasoning.
@@ -36,6 +37,10 @@ class ShotIntentReasoner:
         response = self.llm.chat(
             system=self.system_prompt,
             user=json.dumps(payload, ensure_ascii=False),
+            provider=provider 
         )
+
+        if not response: # Handle None from LLM Error
+            return {}
 
         return json.loads(response)

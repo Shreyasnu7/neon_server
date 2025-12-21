@@ -48,5 +48,17 @@ async def startup_event():
     print("="*50 + "\n\n")
 
 @app.get("/")
+def read_root():
+    return {"status": "Quantum Drone Server Online", "version": "3.0.0"}
+
+# MISSING ENDPOINT FIX
+@app.get("/logs")
+def get_flight_logs():
+    return [] # Return empty list for now to satisfy App
+
+@app.get("/media")
+def get_media_items():
+    return [] # Return empty list to prevent App crashes logic
+
 def root():
     return {"status": "AI Drone Server Running", "auth": "enabled_inline", "ai": "active"}
