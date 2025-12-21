@@ -44,7 +44,7 @@ async def ai_command(payload: dict):
 
     # 4. Push to Execution Queue & Broadcast to Laptop (via websocket usually, or laptop polls this)
     # Ideally, Laptop AI listens to 'plans'.
-    await submit_plan(plan)
+    submit_plan(plan)
 
     return {
         "status": "queued",
