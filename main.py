@@ -23,7 +23,7 @@ class RegisterRequest(BaseModel):
     password: str
 
 # --- App Setup ---
-app = FastAPI(title="AI Drone Server (Unified)", version="3.1")
+app = FastAPI(title="AI Drone Server (Unified)", version="3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -75,10 +75,18 @@ async def register_inline(req: RegisterRequest):
 async def login_inline(req: LoginRequest):
     print(f"LOGIN REQUEST: {req.email}")
     db = load_db()
+    
+    # DEBUG PRINT FOR 401 ERROR
     user = db.get(req.email)
+    
     if not user:
+        print(f"DEBUG: User {req.email} NOT FOUND in DB.")
         raise HTTPException(status_code=404, detail="User not found")
+        
+    print(f"DEBUG: Checking Password. Received='{req.password}' vs Stored='{user.get('password')}'")
+    
     if user["password"] != req.password:
+        print("DEBUG: Password MISMATCH!")
         raise HTTPException(status_code=401, detail="Invalid password")
     
     return {"status": "success", "token": user["token"], "user": {"username": user["username"], "email": req.email, "id": user["token"]}}
