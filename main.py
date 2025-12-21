@@ -23,7 +23,7 @@ class RegisterRequest(BaseModel):
     password: str
 
 # --- App Setup ---
-app = FastAPI(title="AI Drone Server (Unified)", version="3.0")
+app = FastAPI(title="AI Drone Server (Unified)", version="3.1")
 
 app.add_middleware(
     CORSMiddleware,
