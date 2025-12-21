@@ -33,10 +33,15 @@ class CloudOrchestrator:
         # 1. RAW REASONING (The "Director" Brain)
         # This converts "chase car" into { "emotion": "fast", "subject": "car" ... }
         if self.intent_reasoner:
+            # Detect if there is real vision data (detections) in the references
+            # We assume 'image_refs' might hold YOLO JSON objects in this pipeline version
+            # or we get it from 'memory_context'
+            
+            vision_context = [r for r in references if r.get('type') == 'vision_detection']
+            
             raw_intent = self.intent_reasoner.reason(
                 user_text=user_text,
-                image_refs=[r for r in references if r['type'] == 'image'],
-                video_refs=[r for r in references if r['type'] == 'video']
+                memory_context={"vision": vision_context} if vision_context else {}
             )
         else:
             # Fallback if no LLM client passed (or mock)

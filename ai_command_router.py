@@ -2,39 +2,52 @@ from fastapi import APIRouter
 from cloud_ai.orchestrator import CloudOrchestrator
 from plan_router import submit_plan
 from api_schemas import DronePlan
-# Mock LLM Client for now or import real one
-class MockLLM:
-    def chat(self, system, user):
-        import json
-        return json.dumps({
-            "emotional_model": {"vector": {"awe": 0.9}, "peak_allowed": True},
-            "camera_plan": {"shot_energy": 0.8}
-        })
+from cloud_ai.llm import RealLLMClient
 
 router = APIRouter(prefix="/director", tags=["AI-Command"])
-# Initialize Orchestrator (Dependency Injection best practice in real app)
-orchestrator = CloudOrchestrator(llm_client=MockLLM())
+# Initialize Orchestrator with Real AI
+orchestrator = CloudOrchestrator(llm_client=RealLLMClient())
 
 @router.post("/ai/command")
 async def ai_command(payload: dict):
     """
     Structured Pipeline: 
     Input -> Orchestrator -> Plan -> Queue
+    Payload expects:
+    {
+        "text": "chase car",
+        "provider": "gemini" | "openai",
+        "camera": "internal" | "external",
+        "sensitivity": 0.5,
+        "media": [base64_string] (optional)
+    }
     """
-    # 1. Delegate to Orchestrator
+    # 1. Extract Config
+    config = {
+        "provider": payload.get("provider", "gemini"),
+        "camera": payload.get("camera", "external"),
+        "sensitivity": payload.get("sensitivity", 0.5)
+    }
+    
+    # 2. Delegate to Orchestrator (Pass Full Payload)
+    # The Orchestrator will use 'provider' to select the backend if implemented there,
+    # or we set it on the LLM client here if it was stateful (it's stateless, so we assume client handles env vars or we pass context)
+    
+    # We pass the config into the context for the Orchestrator/LLM
     plan_result = await orchestrator.process_request(payload)
     
-    # 2. Ensure it matches DronePlan schema
-    # (Assuming PlanGenerator returns a DronePlan object or dict)
+    # 3. Ensure it matches DronePlan schema
     if isinstance(plan_result, dict):
         plan = DronePlan(**plan_result)
     else:
         plan = plan_result
 
-    # 3. Push to Execution Queue
+    # 4. Push to Execution Queue & Broadcast to Laptop (via websocket usually, or laptop polls this)
+    # Ideally, Laptop AI listens to 'plans'.
     await submit_plan(plan)
 
     return {
         "status": "queued",
-        "plan": plan.dict()
+        "plan": plan.dict(),
+        "used_config": config
     }

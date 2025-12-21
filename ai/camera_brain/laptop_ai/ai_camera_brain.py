@@ -36,7 +36,10 @@ from laptop_ai.ai_autofocus import AIAutofocus
 from laptop_ai.ai_exposure_engine import AIExposureEngine
 from laptop_ai.ai_stabilizer import AIStabilizer
 from laptop_ai.ai_scene_classifier import SceneClassifier
-from laptop_ai.ai_color_engine import AIColorEngine
+from laptop_ai.ai_colour_engine import AIColorEngine
+from laptop_ai.ai_subject_tracker import AdvancedAISubjectTracker
+from laptop_ai.ai_hdr_engine import AIHDREngine
+from laptop_ai.ai_depth_estimator import AIDepthEstimator
 
 
 class AICameraBrain:
@@ -57,6 +60,11 @@ class AICameraBrain:
         self.stabilizer = AIStabilizer()
         self.scene = SceneClassifier()
         self.color = AIColorEngine()
+
+        # Ultra Logic Extensions (Gap Filling)
+        self.tracker = AdvancedAISubjectTracker()
+        self.hdr = AIHDREngine()
+        self.depth = AIDepthEstimator()
 
         # History buffers
         self.last_scene = None
@@ -175,11 +183,32 @@ class AICameraBrain:
         self.last_scene = scene_labels
 
         # ---------------------------------------------------------------------
-        # 2) Subject metadata (for focus + exposure weighting)
+        # 2) Subject metadata (Advanced Tracker + Focus + Exposure)
         # ---------------------------------------------------------------------
         subject = None
+        
+        # Calculate Depth (for focus / HDR)
+        depth_map, _ = self.depth.estimate(frame)
+
         if vision_context:
-            subject = self._compute_subject_metadata(vision_context)
+            # 2a. Update Tracker with raw detections
+            detections = vision_context.get("detections", [])
+            # Tracker expects [{"bbox":..., "cls":..., "conf":...}]
+            ranked_subjects = self.tracker.update(detections, frame_image=frame)
+            
+            # 2b. Select primary subject (highest rank)
+            if ranked_subjects:
+                top_sub = ranked_subjects[0]
+                subject = {
+                    "id": top_sub.id,
+                    "bbox": top_sub.bbox.tolist(),
+                    "distance_m": None # estimated later
+                }
+                
+            # If user selected manually, override
+            selected = vision_context.get("selected")
+            if selected:
+                 subject = self._compute_subject_metadata(vision_context)
 
         # ---------------------------------------------------------------------
         # 3) Autofocus

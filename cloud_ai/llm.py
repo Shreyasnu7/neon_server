@@ -1,32 +1,90 @@
 
+import os
 import json
+import logging
 
-def ask_ai(prompt: str, context: dict = None) -> dict:
-    """
-    Mock LLM implementation to mock cloud reasoning.
-    In production, this would call OpenAI/Gemini API.
-    """
-    # Simple keyword spotting for testing
-    prompt_lower = prompt.lower()
-    
-    action = "hover"
-    target = None
-    style = "cinematic"
-    
-    if "land" in prompt_lower:
-        action = "land"
-    elif "monitor" in prompt_lower or "track" in prompt_lower:
-        action = "orbit"
-        target = "detected_object"
-    elif "takeoff" in prompt_lower:
-        action = "takeoff"
-    elif "scan" in prompt_lower:
-        action = "scan_area"
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+
+# Configure Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class RealLLMClient:
+    def __init__(self):
+        self.gemini_key = os.environ.get("GEMINI_API_KEY")
+        self.openai_key = os.environ.get("OPENAI_API_KEY")
         
-    return {
-        "action": action,
-        "style": style,
-        "target": target,
-        "constraints": {"safety_distance": 2.0},
-        "reasoning": "Mock AI logic processed request."
-    }
+        self.gemini_configured = False
+        self.openai_client = None
+
+        if self.gemini_key and genai:
+            genai.configure(api_key=self.gemini_key)
+            self.gemini_configured = True
+            logger.info("✅ Gemini Client Configured")
+
+        if self.openai_key and OpenAI:
+            self.openai_client = OpenAI(api_key=self.openai_key)
+            logger.info("✅ OpenAI Client Configured")
+
+    def chat(self, system: str, user: str) -> str:
+        """
+        Unified chat interface.
+        Returns raw JSON string response.
+        """
+        full_prompt = f"{system}\n\nUSER REQUEST:\n{user}\n\nOutput JSON only."
+
+        # 1. Try Gemini
+        if self.gemini_configured:
+            try:
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                response = model.generate_content(full_prompt)
+                return self._clean_json(response.text)
+            except Exception as e:
+                logger.error(f"Gemini Error: {e}")
+
+        # 2. Try OpenAI
+        if self.openai_client:
+            try:
+                response = self.openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user}
+                    ],
+                    response_format={"type": "json_object"}
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                logger.error(f"OpenAI Error: {e}")
+
+        # 3. Fallback
+        logger.warning("⚠️ Using Fallback Mock (No Real AI Available)")
+        return self._mock_response(user)
+
+    def _clean_json(self, text: str) -> str:
+        return text.replace("```json", "").replace("```", "").strip()
+
+    def _mock_response(self, user_input: str) -> str:
+        """Simple fallback if keys are missing"""
+        # Try to parse user input to give something semi-relevant if possible, 
+        # but mostly return a safe default.
+        return json.dumps({
+            "emotional_model": {"vector": {"neutral": 1.0}, "peak_allowed": True}, 
+            "camera_plan": {"shot_energy": 0.5, "framing": "wide"},
+            "reasoning": "Fallback: specific cloud keys missing."
+        })
+
+# Legacy function alias if something still imports it
+def ask_ai(prompt, context=None):
+    client = RealLLMClient()
+    # simple adapter
+    payload = {"prompt": prompt, "context": context or {}}
+    return json.loads(client.chat("You are a helper.", json.dumps(payload)))
