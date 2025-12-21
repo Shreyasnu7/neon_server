@@ -1,7 +1,7 @@
 from .intent_builder import IntentBuilder
 from .cinematic_reasoner import CinematicReasoner
 from .plan_generator import PlanGenerator
-from ...ai.shot_intent.reasoning.intent_reasoner import ShotIntentReasoner
+from ai.shot_intent.reasoning.intent_reasoner import ShotIntentReasoner
 # Assuming you have a class for multi-modal acting as the entry reasoning
 # If not, we will use ShotIntentReasoner as the primary entry
 
