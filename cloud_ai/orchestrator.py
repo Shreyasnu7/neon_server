@@ -16,7 +16,10 @@ class CloudOrchestrator:
     def __init__(self, llm_client=None):
         # We need to instantiate the sub-modules
         # Note: In a real app, inject dependencies or config
-        self.intent_reasoner = ShotIntentReasoner(llm_client, "prompts/shot_intent.txt") if llm_client else None
+        import os
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        prompt_path = os.path.join(base_dir, "..", "prompts", "shot_intent.txt")
+        self.intent_reasoner = ShotIntentReasoner(llm_client, prompt_path) if llm_client else None
         self.cinematic_reasoner = CinematicReasoner()
         self.planner = PlanGenerator()
 
