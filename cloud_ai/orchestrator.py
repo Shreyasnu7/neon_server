@@ -28,7 +28,8 @@ class CloudOrchestrator:
         Full Pipeline Execution
         """
         user_text = payload.get("text", "")
-        references = payload.get("media", []) 
+        user_text = payload.get("text", "")
+        references = payload.get("media", []) or [] 
         
         # 1. RAW REASONING (The "Director" Brain)
         # This converts "chase car" into { "emotion": "fast", "subject": "car" ... }
@@ -39,11 +40,16 @@ class CloudOrchestrator:
             
             vision_context = [r for r in references if r.get('type') == 'vision_detection']
             
-            raw_intent = self.intent_reasoner.reason(
-                user_text=user_text,
-                memory_context={"vision": vision_context} if vision_context else {},
-                provider=payload.get("provider", "gemini")
-            )
+            try:
+                raw_intent = self.intent_reasoner.reason(
+                    user_text=user_text,
+                    memory_context={"vision": vision_context} if vision_context else {},
+                    provider=payload.get("provider", "gemini")
+                )
+            except Exception as e:
+                print(f"Orchestrator Error: {e}")
+                # Fallback Intent
+                raw_intent = {"emotional_model": {"vector": {"neutral": 1.0}, "peak_allowed": True}, "camera_plan": {"shot_energy": 0.5}}
         else:
             # Fallback if no LLM client passed (or mock)
             raw_intent = {"emotional_model": {"vector": {"neutral": 1.0}, "peak_allowed": True}, "camera_plan": {"shot_energy": 0.5}}

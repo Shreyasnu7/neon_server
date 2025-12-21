@@ -58,6 +58,9 @@ class RealLLMClient:
         return self._mock_response(user)
 
     def _call_gemini(self, prompt: str) -> str:
+        if not genai:
+             logger.error("Gemini module missing")
+             return None
         try:
             model = genai.GenerativeModel('gemini-1.5-flash')
             response = model.generate_content(prompt)

@@ -41,6 +41,11 @@ class ShotIntentReasoner:
         )
 
         if not response: # Handle None from LLM Error
-            return {}
+            # FALLBACK INTENT (Safety Net)
+            return {
+                "emotional_model": {"vector": {"neutral": 1.0}, "peak_allowed": True}, 
+                "camera_plan": {"shot_energy": 0.5, "framing": "wide"},
+                "reasoning": "Fallback: AI Service Unavailable."
+            }
 
         return json.loads(response)
