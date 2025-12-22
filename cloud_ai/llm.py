@@ -86,13 +86,33 @@ class RealLLMClient:
 
     def _call_gemini(self, prompt: str) -> str:
         if not genai: return None
-        try:
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content(prompt)
-            return self._clean_json(response.text)
-        except Exception as e:
-            logger.error(f"Gemini Error: {e}")
-            return None
+        
+        # Free Tier Limit Strategy:
+        # Gemini 1.5 Pro Free = 2 Requests Per Minute (Too slow!)
+        # Gemini 1.5 Flash Free = 15 Requests Per Minute (Perfect for drones)
+        
+        # User requested cutting-edge/experimental versions:
+        models_to_try = [
+            'gemini-2.0-flash-exp', # Often referred to as next-gen Flash
+            'gemini-3.0-flash',     # Requested by user (will likely 404, but we try!)
+            'gemini-1.5-flash',     # Stable fallback (High rate limit)
+            'gemini-1.5-pro'        # Intelligent fallback
+        ]
+        
+        for model_name in models_to_try:
+            try:
+                # print(f"DEBUG: Trying {model_name}...")
+                model = genai.GenerativeModel(model_name)
+                response = model.generate_content(prompt)
+                return self._clean_json(response.text)
+            except Exception as e:
+                logger.error(f"Gemini {model_name} Error: {e}")
+                if "429" in str(e): continue # Try next model if quota hit
+                if "404" in str(e): continue # Try next if model not found
+                # If it's another error (like auth), it will likely fail for all, but let's loop anyway
+        
+        # If all failed
+        return None
 
     def _call_openai(self, system: str, user: str, client=None) -> str:
         try:
