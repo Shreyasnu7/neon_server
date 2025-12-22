@@ -48,17 +48,23 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+from cloud_ai.dependencies import get_orchestrator
+
 @ws_router.websocket("/connect/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     """
     Main Relay Logic:
     - If client_id == 'laptop_vision', it's the Drone.
-    - If client_id == 'mobile_app' (or others), it's the App.
+    - If client_id == 'mobile_app', it's the App.
     """
     is_drone = (client_id == "laptop_vision")
+    orchestrator = get_orchestrator()
     
     if is_drone:
         await manager.connect_drone(websocket)
+        # REGISTER DRONE WITH BRAIN
+        orchestrator.dispatcher.register_drone_connection(websocket)
+        print("✅ Drone registered with Enterprise Brain")
     else:
         await manager.connect_mobile(websocket)
 
@@ -68,19 +74,27 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             
             # ROUTING LOGIC
             if is_drone:
-                # 1. Drone -> App (Telemetry, Video)
-                # Wraps raw data in standard packet if needed, or passes through
-                # Assuming Laptop sends valid JSON
+                # 1. Drone -> Brain (Telemetry/Video)
+                # Parse packet
+                try:
+                    packet = json.loads(data)
+                    # Feed brain context if present
+                    if "brain_context" in packet:
+                        # Could update session state here
+                        pass
+                except: pass
+
+                # 2. Drone -> App (Pass-through)
                 await manager.broadcast_to_mobile(data)
                 
             else:
-                # 2. App -> Drone (Commands, Joysticks)
-                # App sends: {"type": "joystick", "payload": {...}}
+                # 3. App -> Drone (Commands)
                 await manager.send_to_drone(data)
                 
     except WebSocketDisconnect:
         if is_drone:
             manager.disconnect_drone()
+            orchestrator.dispatcher.remove_drone_connection()
         else:
             manager.disconnect_mobile(websocket)
     except Exception as e:

@@ -8,28 +8,23 @@ from cloud_ai.plan_generator import PlanGenerator
 from cloud_ai.llm import ask_ai  # your existing LLM wrapper
 
 
-planner = PlanGenerator()
-
-ai_router = APIRouter(tags=["AI"])
-
-UPLOAD_DIR = "/tmp/uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
 # -----------------------
 #  Text → Job
 # -----------------------
+from cloud_ai.dependencies import get_orchestrator
+
 @ai_router.post("/text")
 async def ai_text(req: TextRequest):
-    job_id = str(uuid.uuid4())
-    payload = {
-        "type": "text",
-        "text": req.text,
-        "user_id": req.user_id,
-        "drone_id": req.drone_id,
-        "include_vision": req.include_vision
-    }
-    new_job(job_id, payload)
-    return {"job_id": job_id, "status": "queued"}
+    orchestrator = get_orchestrator()
+    
+    # Unified Pipeline Call
+    result = orchestrator.process_multimodal_request(
+        text=req.text,
+        user_id=req.user_id,
+        drone_id=req.drone_id
+        # brain_context can be added if we extend the request model
+    )
+    return result
 
 # -----------------------
 #  Image upload (multiple)
