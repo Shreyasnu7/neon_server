@@ -41,6 +41,13 @@ from laptop_ai.ai_subject_tracker import AdvancedAISubjectTracker
 from laptop_ai.ai_hdr_engine import AIHDREngine
 from laptop_ai.ai_depth_estimator import AIDepthEstimator
 
+# REAL DEEP PIPELINE IMPORTS
+from laptop_ai.ai_pipeline.colour.aces_colour_pipeline import ACESColorPipeline
+from laptop_ai.ai_pipeline.dro_engine.dynamic_range_opt import DynamicRangeOptimizer
+from laptop_ai.ai_pipeline.stabilization.mesh_stabilizer import MeshStabilizer
+from laptop_ai.ai_pipeline.temporal.temporal_colour_consistency import TemporalConsistency
+from laptop_ai.ai_pipeline.lens.lens_correction import LensSignalEngine
+
 
 class AICameraBrain:
     """
@@ -60,6 +67,13 @@ class AICameraBrain:
         self.stabilizer = AIStabilizer()
         self.scene = SceneClassifier()
         self.color = AIColorEngine()
+
+        # Real Deep Pipeline Instantiation
+        self.aces = ACESColorPipeline()
+        self.dro = DynamicRangeOptimizer(clip_limit=3.0)
+        self.stabilizer_mesh = MeshStabilizer()
+        self.temporal = TemporalConsistency(alpha=0.15)
+        self.lens_model = LensSignalEngine(k1=-0.15)
 
         # Ultra Logic Extensions (Gap Filling)
         self.tracker = AdvancedAISubjectTracker()
@@ -250,26 +264,20 @@ class AICameraBrain:
         tone_map = self.exposure.local_tone_map(frame)
 
         # ---------------------------------------------------------------------
-        # 5) Stabilization (gyro+flow) + MOTION PREDICTION
+        # 5) Stabilization (Real Optical Flow)
         # ---------------------------------------------------------------------
         # fusion_state may contain “gyro”: {"gx","gy","gz"}
-        gyro = fusion_state.get("gyro") if fusion_state else None
-        stab_cmd = self.stabilizer.update(frame, gyro)
-        
-        # APPLY ANTICIPATION (If tracking)
-        if subject:
-             # Mock velocity for now, or derive from tracker history
-             pred_offset = self.anticipator.predict(velocity=0.5, acceleration=0.1, anticipation_bias=0.2)
-             # Adjust stabilization target based on prediction
-             stab_cmd["dx"] = stab_cmd.get("dx", 0) + pred_offset
-             
-        # APPLY SMOOTHING
-        stab_cmd["dx"] = self.smoother.update(stab_cmd.get("dx", 0))
+        # For now, we use visual stabilization
+        stab_frame = self.stabilizer.process(frame)
         
         # ---------------------------------------------------------------------
-        # 5b) LENS MODELING
+        # 5b) LENS MODELING & DRO
         # ---------------------------------------------------------------------
-        comp_factor = self.lens_model.compute_compression(distance=5.0, compression_bias=0.1)
+        # Lens un-distortion
+        clean_frame = self.lens_model.undistort(stab_frame or frame)
+        
+        # Dynamic Range Optimization
+        dro_frame = self.dro.process(clean_frame)
         
         # ---------------------------------------------------------------------
         # 5c) DEEP LOGIC LAYER (The "100 File" Integration)
