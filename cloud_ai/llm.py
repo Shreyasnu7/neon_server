@@ -29,24 +29,50 @@ class RealLLMClient:
             genai.configure(api_key=self.gemini_key)
             self.gemini_configured = True
             logger.info("✅ Gemini Client Configured")
-             elif client_gemini_key and genai:
-                 # Temporary config for this request (or global re-config)
-                 # Converting to object-based usage in future would be better, but for now:
+
+        if self.openai_key and OpenAI:
+            self.openai_client = OpenAI(api_key=self.openai_key)
+            logger.info("✅ OpenAI Client Configured")
+
+    def chat(self, system: str, user: str, provider: str = "gemini", api_keys: dict = {}) -> str:
+        """
+        Unified chat interface.
+        Returns raw JSON string response.
+        """
+        # DEBUG: Verify Keys
+        print(f"DEBUGGING LLM: Provider={provider}")
+        print(f"DEBUGGING LLM: Keys Present: {list(api_keys.keys())}")
+        if provider == "gemini":
+             print(f"DEBUGGING LLM: Gemini Key Length: {len(api_keys.get('gemini', '') or os.getenv('GEMINI_API_KEY', '') or '')}")
+        
+        full_prompt = f"{system}\n\nUSER REQUEST:\n{user}\n\nOutput JSON only."
+        
+        # Dynamic Configuration from Client Keys
+        client_gemini_key = api_keys.get("gemini")
+        client_openai_key = api_keys.get("openai")
+        
+        # 1. Try Requested Provider First
+        if provider == "gemini":
+             if client_gemini_key and genai:
                  try:
                     genai.configure(api_key=client_gemini_key)
                     return self._call_gemini(full_prompt)
-                 except:
-                    pass
+                 except Exception as e:
+                    logger.error(f"Client Gemini Key Failed: {e}")
+             
+             if self.gemini_configured:
+                 return self._call_gemini(full_prompt)
 
         elif provider == "openai":
-             if self.openai_client:
-                 return self._call_openai(system, user)
-             elif client_openai_key and OpenAI:
+             if client_openai_key and OpenAI:
                  try:
                     temp_client = OpenAI(api_key=client_openai_key)
                     return self._call_openai(system, user, client=temp_client)
-                 except:
-                    pass
+                 except Exception as e:
+                    logger.error(f"Client OpenAI Key Failed: {e}")
+
+             if self.openai_client:
+                 return self._call_openai(system, user)
         
         # 2. Fallback (If requested is missing, try the other)
         # Check Env Vars first
@@ -110,7 +136,7 @@ class RealLLMClient:
         return json.dumps({
             "emotional_model": {"vector": {"neutral": 1.0}, "peak_allowed": True}, 
             "camera_plan": {"shot_energy": 0.5, "framing": "wide"},
-            "reasoning": "Fallback: specific cloud keys missing."
+            "reasoning": "Fallback: AI Service Unavailable (Check Keys)"
         })
 
 # Legacy function alias if something still imports it
