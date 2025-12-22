@@ -34,24 +34,57 @@ class RealLLMClient:
             self.openai_client = OpenAI(api_key=self.openai_key)
             logger.info("✅ OpenAI Client Configured")
 
-    def chat(self, system: str, user: str, provider: str = "gemini") -> str:
+    def chat(self, system: str, user: str, provider: str = "gemini", api_keys: dict = {}) -> str:
         """
         Unified chat interface.
         Returns raw JSON string response.
         """
         full_prompt = f"{system}\n\nUSER REQUEST:\n{user}\n\nOutput JSON only."
-
+        
+        # Dynamic Configuration from Client Keys
+        client_gemini_key = api_keys.get("gemini")
+        client_openai_key = api_keys.get("openai")
+        
         # 1. Try Requested Provider First
-        if provider == "gemini" and self.gemini_configured:
-             return self._call_gemini(full_prompt)
-        elif provider == "openai" and self.openai_client:
-             return self._call_openai(system, user)
+        if provider == "gemini":
+             if self.gemini_configured:
+                 return self._call_gemini(full_prompt)
+             elif client_gemini_key and genai:
+                 # Temporary config for this request (or global re-config)
+                 # Converting to object-based usage in future would be better, but for now:
+                 try:
+                    genai.configure(api_key=client_gemini_key)
+                    return self._call_gemini(full_prompt)
+                 except:
+                    pass
+
+        elif provider == "openai":
+             if self.openai_client:
+                 return self._call_openai(system, user)
+             elif client_openai_key and OpenAI:
+                 try:
+                    temp_client = OpenAI(api_key=client_openai_key)
+                    return self._call_openai(system, user, client=temp_client)
+                 except:
+                    pass
         
         # 2. Fallback (If requested is missing, try the other)
-        if self.gemini_configured:
-             return self._call_gemini(full_prompt)
-        if self.openai_client:
-             return self._call_openai(system, user)
+        # Check Env Vars first
+        if self.gemini_configured: return self._call_gemini(full_prompt)
+        if self.openai_client: return self._call_openai(system, user)
+        
+        # Check Client Keys second
+        if client_gemini_key and genai:
+            try:
+                genai.configure(api_key=client_gemini_key)
+                return self._call_gemini(full_prompt)
+            except: pass
+            
+        if client_openai_key and OpenAI:
+             try:
+                temp_client = OpenAI(api_key=client_openai_key)
+                return self._call_openai(system, user, client=temp_client)
+             except: pass
 
         # 3. Fail
         logger.warning("⚠️ Using Fallback Mock (No Real AI Available)")
@@ -69,9 +102,12 @@ class RealLLMClient:
             logger.error(f"Gemini Error: {e}")
             return None
 
-    def _call_openai(self, system: str, user: str) -> str:
+    def _call_openai(self, system: str, user: str, client=None) -> str:
         try:
-            response = self.openai_client.chat.completions.create(
+            active_client = client or self.openai_client
+            if not active_client: return None
+            
+            response = active_client.chat.completions.create(
                 model="gpt-4o",
                 messages=[
                     {"role": "system", "content": system},
