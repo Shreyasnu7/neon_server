@@ -91,25 +91,23 @@ class RealLLMClient:
         # Gemini 1.5 Pro Free = 2 Requests Per Minute (Too slow!)
         # Gemini 1.5 Flash Free = 15 Requests Per Minute (Perfect for drones)
         
-        # User requested cutting-edge/experimental versions:
+        # User strictly requested ONLY gemini-3.0-flash
         models_to_try = [
-            'gemini-2.0-flash-exp', # Often referred to as next-gen Flash
-            'gemini-3.0-flash',     # Requested by user (will likely 404, but we try!)
-            'gemini-1.5-flash',     # Stable fallback (High rate limit)
-            'gemini-1.5-pro'        # Intelligent fallback
+            'gemini-3.0-flash'
         ]
         
         for model_name in models_to_try:
             try:
-                # print(f"DEBUG: Trying {model_name}...")
+                print(f"DEBUGGING LLM: Trying Model: {model_name}")
                 model = genai.GenerativeModel(model_name)
                 response = model.generate_content(prompt)
                 return self._clean_json(response.text)
             except Exception as e:
+                print(f"DEBUGGING LLM: Failed {model_name} -> {e}")
                 logger.error(f"Gemini {model_name} Error: {e}")
-                if "429" in str(e): continue # Try next model if quota hit
-                if "404" in str(e): continue # Try next if model not found
-                # If it's another error (like auth), it will likely fail for all, but let's loop anyway
+                if "429" in str(e): continue 
+                if "404" in str(e): continue 
+                # continue trying others even if it's another error
         
         # If all failed
         return None
