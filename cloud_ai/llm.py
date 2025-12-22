@@ -51,7 +51,10 @@ class RealLLMClient:
 
         # DEBUG: Verify Keys
         print(f"DEBUGGING LLM: Provider={provider}")
-        # print(f"DEBUGGING LLM: Keys Present: {list(api_keys.keys())}") # Privacy safe
+        print(f"DEBUGGING LLM: Keys Present: {list(api_keys.keys())}") 
+        if provider == "gemini":
+             val = api_keys.get('gemini', '') or os.getenv('GEMINI_API_KEY', '') or ''
+             print(f"DEBUGGING LLM: Gemini Key Length: {len(val)}")
         
         full_prompt = f"{system}\n\nUSER REQUEST:\n{user}\n\nOutput JSON only."
         
@@ -72,6 +75,10 @@ class RealLLMClient:
                  except Exception as e:
                     logger.error(f"Client Gemini Key Failed: {e}")
                     last_error = f"Gemini Key Error: {e}"
+             
+             elif not client_gemini_key:
+                 print("DEBUGGING LLM: Client Gemini Key is MISSING/EMPTY")
+                 last_error = "Client Gemini Key Missing"
              
              if self.gemini_configured:
                  return self._call_gemini(full_prompt)
