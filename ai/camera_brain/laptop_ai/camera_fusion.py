@@ -51,6 +51,16 @@ class CameraFusion:
     def update_gopro_frame(self, frame: np.ndarray):
         self.last_gopro_frame = frame
         self.last_update_ts = time.time()
+        
+    # Alias for Director compatibility
+    update_external_frame = update_gopro_frame
+
+    def get_active_frame(self) -> Optional[np.ndarray]:
+        """Returns the frame from the currently selected best camera."""
+        source = self.select_best_source()
+        if source == "gopro":
+            return self.last_gopro_frame
+        return self.last_internal_frame
 
     def update_gyro(self, gx, gy, gz):
         self.last_gyro = {"gx": gx, "gy": gy, "gz": gz}

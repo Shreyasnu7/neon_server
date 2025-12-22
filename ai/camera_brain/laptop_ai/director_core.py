@@ -65,11 +65,11 @@ class Director:
         self.frame_skip = FRAME_SKIP or 1
     
     def predict_collision(self, future_points, obstacles):
-    for p in future_points:
-        for ob in obstacles:
-            if np.linalg.norm(p - ob.position) < ob.radius:
-                return True
-    return False
+        for p in future_points:
+            for ob in obstacles:
+                if np.linalg.norm(p - ob.position) < ob.radius:
+                    return True
+        return False
 
     async def start(self):
         await self.ws.connect()
@@ -123,10 +123,22 @@ class Director:
             
             # 1. Update Fusion State (Real-time inputs)
             self.fusion.update_internal_frame(frame)
+            
+            # 1b. Poll GoPro (if active)
+            # In a real loop, might want to do this async or in separate thread to not block Internal cam
+            if self.gopro.connected:
+                 gp_frame = self.gopro.grab_frame()
+                 if gp_frame is not None:
+                     self.fusion.update_external_frame(gp_frame) # Assuming this method exists or we add it
+            
             fusion_state = self.fusion.get_fusion_state()
             
             # 2. Vision Inference
-            results = model(frame, stream=True, verbose=False)
+            # Trigger inference on the SELECTED source from Fusion
+            active_frame = self.fusion.get_active_frame() or frame
+            if active_frame is None: active_frame = frame
+            
+            results = model(active_frame, stream=True, verbose=False)
             detections = []
             
             for r in results:
@@ -142,6 +154,7 @@ class Director:
                             "confidence": conf
                         })
                         x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        # Draw on the DISPLAY frame only
                         cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             
             # 3. Running the OMNI-BRAIN (decide every frame for telemetry)
@@ -341,6 +354,10 @@ class Director:
         """
         Send plan to VPS with Robust Serialization.
         """
+        if self.simulate:
+            print(f"[SIMULATION] Would send plan to server (job={job_id}): {primitive.get('action')}")
+            return
+
         packet = {
             "target": "server",
             "type": "ai_plan",
