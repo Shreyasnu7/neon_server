@@ -3,11 +3,13 @@ import os
 import json
 import logging
 
+GENAI_IMPORT_ERROR = None
 try:
     import google.generativeai as genai
     print("DEBUG: Successfully imported google.generativeai")
 except ImportError as e:
     genai = None
+    GENAI_IMPORT_ERROR = str(e)
     print(f"CRITICAL ERROR: Could not import google.generativeai: {e}")
 
 try:
@@ -91,7 +93,10 @@ class RealLLMClient:
         return self._mock_response(user, error=last_error)
 
     def _call_gemini(self, prompt: str) -> str:
-        if not genai: return None
+        if not genai: 
+            error_msg = f"GenAI Lib Missing: {GENAI_IMPORT_ERROR or 'Unknown'}"
+            logger.error(error_msg)
+            raise Exception(error_msg) # Raise to be caught by chat() loop or fallback logic
         
         # Free Tier Limit Strategy:
         # Gemini 1.5 Pro Free = 2 Requests Per Minute (Too slow!)
