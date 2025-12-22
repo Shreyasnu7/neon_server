@@ -37,7 +37,7 @@ class CloudOrchestrator:
             # We assume 'image_refs' might hold YOLO JSON objects in this pipeline version
             # or we get it from 'memory_context'. Safely filter to avoid crashing on base64 strings.
             
-            vision_context = [r for r in references if isinstance(r, dict) and r.get('type') == 'vision_detection']
+            vision_context = [r for r in references if isinstance(r, dict) and r.get('type') in ['vision_detection', 'user_upload']]
             
             try:
                 raw_intent = self.intent_reasoner.reason(

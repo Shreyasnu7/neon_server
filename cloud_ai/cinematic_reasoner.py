@@ -9,10 +9,16 @@ class CinematicReasoner:
     """
 
     def refine(self, intent: dict) -> dict:
-        emotion = intent["emotional_model"]["vector"]
+        # Robust access to emotional vector
+        try:
+             emotion = intent.get("emotional_model", {}).get("vector", {"neutral": 1.0})
+             peak_allowed = intent.get("emotional_model", {}).get("peak_allowed", True)
+        except:
+             emotion = {"neutral": 1.0}
+             peak_allowed = True
 
         # Prevent early climax
-        if not intent["emotional_model"]["peak_allowed"]:
+        if not peak_allowed:
             emotion = {
                 k: min(v, 0.85) for k, v in emotion.items()
             }
