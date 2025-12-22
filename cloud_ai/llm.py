@@ -56,18 +56,6 @@ class RealLLMClient:
              val = api_keys.get('gemini', '') or os.getenv('GEMINI_API_KEY', '') or ''
              print(f"DEBUGGING LLM: Gemini Key Length: {len(val)}")
         
-        full_prompt = f"{system}\n\nUSER REQUEST:\n{user}\n\nOutput JSON only."
-        
-        # Dynamic Configuration from Client Keys
-        client_gemini_key = api_keys.get("gemini")
-        client_openai_key = api_keys.get("openai")
-        
-                    else: last_error = f"OpenAI Key Error: {str(e)[:50]}..."
-
-             if self.openai_client:
-                 return self._call_openai(system, user)
-        
-        # 2. Fallback RE-ATTEMPT (Try the other one)
         # ... (Simplified logic: If primary failed, we try others, but for now let's just error out to show the message)
         
         # 3. Fail
