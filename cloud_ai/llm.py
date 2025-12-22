@@ -29,26 +29,6 @@ class RealLLMClient:
             genai.configure(api_key=self.gemini_key)
             self.gemini_configured = True
             logger.info("✅ Gemini Client Configured")
-
-        if self.openai_key and OpenAI:
-            self.openai_client = OpenAI(api_key=self.openai_key)
-            logger.info("✅ OpenAI Client Configured")
-
-    def chat(self, system: str, user: str, provider: str = "gemini", api_keys: dict = {}) -> str:
-        """
-        Unified chat interface.
-        Returns raw JSON string response.
-        """
-        full_prompt = f"{system}\n\nUSER REQUEST:\n{user}\n\nOutput JSON only."
-        
-        # Dynamic Configuration from Client Keys
-        client_gemini_key = api_keys.get("gemini")
-        client_openai_key = api_keys.get("openai")
-        
-        # 1. Try Requested Provider First
-        if provider == "gemini":
-             if self.gemini_configured:
-                 return self._call_gemini(full_prompt)
              elif client_gemini_key and genai:
                  # Temporary config for this request (or global re-config)
                  # Converting to object-based usage in future would be better, but for now:
