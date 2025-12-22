@@ -1,5 +1,5 @@
 
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 # 1. Install System Dependencies for OpenCV & Networking
 # libgl1-mesa-glx is REQUIRED for cv2.

@@ -1,6 +1,6 @@
 # /ai/shot_intent/reasoning/intent_reasoner.py
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 import json
 
 
@@ -18,9 +18,9 @@ class ShotIntentReasoner:
     def reason(
         self,
         user_text: str,
-        image_refs: list[str] | None = None,
-        video_refs: list[str] | None = None,
-        memory_context: Dict[str, Any] | None = None,
+        image_refs: Optional[list[str]] = None,
+        video_refs: Optional[list[str]] = None,
+        memory_context: Optional[Dict[str, Any]] = None,
         provider: str = "gemini",
         api_keys: Dict[str, str] = {} # NEW
     ) -> Dict[str, Any]:
