@@ -4,6 +4,9 @@ from pydantic import BaseModel
 import json
 import os
 import uuid
+from dotenv import load_dotenv
+
+load_dotenv() # Load environment variables from .env file
 
 # --- ROUTER IMPORTS ---
 from ai_router import ai_router

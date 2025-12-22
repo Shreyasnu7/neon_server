@@ -1,4 +1,6 @@
 import asyncio
+from dotenv import load_dotenv
+load_dotenv()
 from laptop_ai.director_core import main_loop
 
 if __name__ == "__main__":
