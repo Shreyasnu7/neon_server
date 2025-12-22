@@ -5,13 +5,27 @@ import logging
 
 try:
     import google.generativeai as genai
-except ImportError:
+    print("DEBUG: Successfully imported google.generativeai")
+except ImportError as e:
     genai = None
+    print(f"CRITICAL ERROR: Could not import google.generativeai: {e}")
 
 try:
     from openai import OpenAI
 except ImportError:
     OpenAI = None
+
+# ... (logging config)
+
+# ... (inside chat method)
+        
+        # User requested gemini-3.0-flash.
+        # We also include 1.5-flash as a hidden backup so the drone actually FLIES.
+        models_to_try = [
+            'gemini-3.0-flash',     # User's top choice
+            'gemini-2.0-flash-exp', # Next Gen Experimental
+            'gemini-1.5-flash'      # Safety Net (Guaranteed to work)
+        ]
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
