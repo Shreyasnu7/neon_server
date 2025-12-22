@@ -74,7 +74,109 @@ class Director:
     async def start(self):
         await self.ws.connect()
         self.ws.add_recv_handler(self._handle_packet)
-        print("Director: connected to messaging service. Waiting for jobs...")
+        # Start the continuous vision/streaming loop (from start_laptop_ai.py logic)
+        asyncio.create_task(self._vision_streaming_loop())
+        print("Director: connected to messaging service and vision loop started.")
+
+    async def _vision_streaming_loop(self):
+        """
+        Continuous loop: Capture -> Inference -> Brain -> Stream to Cloud.
+        Replaces the old start_laptop_ai.py while keeping DirectorCore logic.
+        """
+        print("👁️ Director Vision Loop Active")
+        from ultralytics import YOLO
+        import base64
+        
+        model = YOLO("yolov8n.pt")
+        cap = cv2.VideoCapture(0)
+        last_send = 0
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                await asyncio.sleep(0.1)
+                continue
+            
+            display_frame = frame.copy()
+            
+            # --- TONE CURVE ENGINE (ACES) ---
+            # Instantiate lazily or outside loop (doing lazy here for simplicity or add to init)
+            # ideally self.tone_engine should be in __init__
+            if not getattr(self, "tone_engine", None):
+                 try:
+                     from ai.camera_brain.laptop_ai.ai_pipeline.tone_curve.global_tone_curve import ToneCurveAdaptiveEngine
+                     self.tone_engine = ToneCurveAdaptiveEngine(mode="ACES")
+                 except ImportError: self.tone_engine = None
+
+            if self.tone_engine:
+                 try:
+                    # Simple scene analysis for adaptive curve
+                    mean_lum = frame.mean() / 255.0
+                    scene_data = {
+                        "total_clipping": 0.05,
+                        "scene_key": mean_lum,
+                        "r_clip": 0.0, "g_clip": 0.0, "b_clip": 0.0
+                    }
+                    display_frame = self.tone_engine.apply_adaptive(display_frame, scene_data)
+                    cv2.putText(display_frame, "ACES GRADING", (10, frame.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                 except Exception: pass
+            
+            # 1. Update Fusion State (Real-time inputs)
+            self.fusion.update_internal_frame(frame)
+            fusion_state = self.fusion.get_fusion_state()
+            
+            # 2. Vision Inference
+            results = model(frame, stream=True, verbose=False)
+            detections = []
+            
+            for r in results:
+                boxes = r.boxes
+                for box in boxes:
+                    cls_name = model.names[int(box.cls[0])]
+                    conf = float(box.conf[0])
+                    if conf > 0.5:
+                        detections.append({
+                            "label": cls_name,
+                            "bbox": box.xyxy[0].tolist(),
+                            "center": box.xywh[0].tolist(),
+                            "confidence": conf
+                        })
+                        x1, y1, x2, y2 = map(int, box.xyxy[0])
+                        cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            
+            # 3. Running the OMNI-BRAIN (decide every frame for telemetry)
+            # We pass vision_context so brain knows about subjects
+            brain_plan = self.ai_cam.decide(
+                user_text="", 
+                fusion_state=fusion_state, 
+                frame=frame,
+                vision_context={"detections": detections}
+            )
+            
+            # Visualize Brain State
+            mode = "CINEMATIC"
+            if brain_plan.get("scene", {}).get("action", 0) > 0.5: mode = "ACTION"
+            cv2.putText(display_frame, f"BRAIN: {mode}", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            
+            # 4. Stream to Cloud (10 FPS)
+            now = time.time()
+            if now - last_send > 0.1:
+                _, buffer = cv2.imencode('.jpg', display_frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+                b64_frame = base64.b64encode(buffer).decode('utf-8')
+                
+                payload = {
+                    "type": "video_frame",
+                    "target": "server", # Routing info
+                    "image": b64_frame,
+                    "detections": detections,
+                    "brain_context": brain_plan, # The critical link
+                    "timestamp": now
+                }
+                # Use the robust MessagingClient to send
+                await self.ws.send(payload)
+                last_send = now
+
+            await asyncio.sleep(0.01)
 
     async def _handle_packet(self, packet):
         """
