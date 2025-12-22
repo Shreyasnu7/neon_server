@@ -79,9 +79,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 try:
                     packet = json.loads(data)
                     # Feed brain context if present
-                    if "brain_context" in packet:
-                        # Could update session state here
-                        pass
+                    if "brain_context" in packet or "telemetry" in packet:
+                        # 1a. FEED THE BRAIN
+                        # This allows the Orchestrator to update SessionState (position, battery, status)
+                        orchestrator.monitor_telemetry(packet)
                 except: pass
 
                 # 2. Drone -> App (Pass-through)

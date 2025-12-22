@@ -35,6 +35,28 @@ class CloudOrchestrator:
         """Dependency injection for the LLM provider."""
         self.reasoner.llm = llm_client
 
+    def monitor_telemetry(self, telemetry: dict):
+        """
+        Ingest telemetry to update session state (blind no more).
+        """
+        # Example telemetry: {"type":"telemetry", "lat":..., "lon":..., "battery":...}
+        if "lat" in telemetry:
+             self.state.last_known_position = {
+                 "lat": telemetry.get("lat"),
+                 "lon": telemetry.get("lon"),
+                 "alt": telemetry.get("alt", 0)
+             }
+        
+        if "battery" in telemetry:
+             self.state.last_health_status = {
+                 "battery": telemetry.get("battery"),
+                 "rssi": telemetry.get("rssi", 0)
+             }
+        
+        # If we see "brain_context", we could store it for context-aware reasoning
+        if "brain_context" in telemetry:
+             self.state.metadata["last_brain_context"] = json.dumps(telemetry["brain_context"])
+
     def process_multimodal_request(self, text, user_id, drone_id, images=None, video=None, brain_context=None):
         """
         Full Pipeline: User -> LLM -> Validation -> Plan -> Dispatch.
