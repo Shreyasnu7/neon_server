@@ -61,9 +61,13 @@ class RealLLMClient:
         
         # 1. Try Requested Provider First
         if provider == "gemini":
-             if client_gemini_key and genai:
+             if not genai:
+                 last_error = f"Lib Import Fail: {GENAI_IMPORT_ERROR or 'Unknown'}"
+                 logger.warning(last_error)
+             
+             elif client_gemini_key:
                  try:
-                    genai.configure(api_key=client_gemini_key)
+                    # Configure execution...
                     return self._call_gemini(full_prompt)
                  except Exception as e:
                     logger.error(f"Client Gemini Key Failed: {e}")
