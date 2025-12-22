@@ -17,15 +17,7 @@ except ImportError:
 
 # ... (logging config)
 
-# ... (inside chat method)
-        
-        # User requested gemini-3.0-flash.
-        # We also include 1.5-flash as a hidden backup so the drone actually FLIES.
-        models_to_try = [
-            'gemini-3.0-flash',     # User's top choice
-            'gemini-2.0-flash-exp', # Next Gen Experimental
-            'gemini-1.5-flash'      # Safety Net (Guaranteed to work)
-        ]
+
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
@@ -105,9 +97,11 @@ class RealLLMClient:
         # Gemini 1.5 Pro Free = 2 Requests Per Minute (Too slow!)
         # Gemini 1.5 Flash Free = 15 Requests Per Minute (Perfect for drones)
         
-        # User strictly requested ONLY gemini-3.0-flash
+        # User strictly requested gemini-3.0-flash, but we keep backups to prevent crashes.
         models_to_try = [
-            'gemini-3.0-flash'
+            'gemini-3.0-flash',     
+            'gemini-2.0-flash-exp',
+            'gemini-1.5-flash'
         ]
         
         for model_name in models_to_try:
