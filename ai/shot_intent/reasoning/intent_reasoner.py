@@ -46,7 +46,15 @@ class ShotIntentReasoner:
             # FALLBACK INTENT (Safety Net)
             return {
                 "emotional_model": {"vector": {"neutral": 1.0}, "peak_allowed": True}, 
-                "camera_plan": {"shot_energy": 0.5, "framing": "wide"},
+                "camera_plan": {
+                    "shot_energy": 0.5, 
+                    "framing": "wide",
+                    "movement_style": "smooth-stabilized"
+                },
+                # KEYS REQUIRED BY PLANNER:
+                "motion_energy": 0.1,  # Conservative fallback
+                "risk_tolerance": 0.0, # Safe fallback
+                "shot_type": "hover",  # Safe fallback
                 "reasoning": "Fallback: AI Service Unavailable."
             }
 
