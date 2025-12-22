@@ -56,9 +56,53 @@ class RealLLMClient:
              val = api_keys.get('gemini', '') or os.getenv('GEMINI_API_KEY', '') or ''
              print(f"DEBUGGING LLM: Gemini Key Length: {len(val)}")
         
-        # ... (Simplified logic: If primary failed, we try others, but for now let's just error out to show the message)
+        full_prompt = f"{system}\n\nUSER REQUEST:\n{user}\n\nOutput JSON only."
         
-        # 3. Fail
+        # Dynamic Configuration from Client Keys
+        client_gemini_key = api_keys.get("gemini")
+        client_openai_key = api_keys.get("openai")
+        
+        # 1. Try Requested Provider First
+        if provider == "gemini":
+             if not genai:
+                 last_error = f"Lib Import Fail: {GENAI_IMPORT_ERROR or 'Unknown'}"
+                 logger.warning(last_error)
+             
+             elif client_gemini_key:
+                 try:
+                    # Configure execution...
+                    return self._call_gemini(full_prompt, api_key=client_gemini_key)
+                 except Exception as e:
+                    logger.error(f"Client Gemini Key Failed: {e}")
+                    last_error = f"Gemini Key Error: {e}"
+             
+             elif not client_gemini_key and self.gemini_configured:
+                  try:
+                     return self._call_gemini(full_prompt, api_key=self.gemini_key)
+                  except Exception as e:
+                     last_error = f"Server Gemini Key Error: {e}"
+             
+             else:
+                 last_error = "Client Gemini Key Missing"
+                 print("DEBUGGING LLM: Client Gemini Key is MISSING/EMPTY")
+
+
+        elif provider == "openai":
+             if client_openai_key and OpenAI:
+                 try:
+                    temp_client = OpenAI(api_key=client_openai_key)
+                    return self._call_openai(system, user, client=temp_client)
+                 except Exception as e:
+                    logger.error(f"Client OpenAI Key Failed: {e}")
+                    if "429" in str(e): last_error = "OpenAI Quota Exceeded (Check Billing)"
+                    else: last_error = f"OpenAI Key Error: {str(e)[:50]}..."
+
+             if self.openai_client:
+                 try:
+                     return self._call_openai(system, user)
+                 except Exception as e:
+                     last_error = f"Server OpenAI Key Error: {e}"
+
         logger.warning(f"⚠️ Using Fallback. Reason: {last_error}")
         return self._mock_response(user, error=last_error)
 
