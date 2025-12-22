@@ -112,13 +112,13 @@ class RealLLMClient:
             logger.error(error_msg)
             raise Exception(error_msg)
         
-        # User strictly requested gemini-3.0-flash, but we keep backups to prevent crashes.
+        # User strictly requested gemini-3.0-flash.
+        # FOUND IN LOGS: 'models/gemini-3-flash-preview', 'models/gemini-2.5-flash', etc.
         models_to_try = [
-            'gemini-3.0-flash',
-            'gemini-2.0-flash-exp',
-            'gemini-1.5-flash',
-            'gemini-1.5-flash-001', # Try explicit version
-            'gemini-pro'            # Legacy, but usually works
+            'gemini-3-flash-preview',      # exact match from logs
+            'gemini-2.5-flash',            # fallback 1
+            'gemini-2.0-flash',            # fallback 2
+            'gemini-flash-latest'          # generic fallback
         ]
         
         # FORCE CONFIGURATION (Fix for 'No API_KEY' error)
@@ -138,14 +138,7 @@ class RealLLMClient:
                 # Try next model for ANY error (Auth, 404, etc) to ensure we find a working one
                 continue
         
-        # If all failed, help us debug WHY by listing what IS available
-        try:
-             print("DEBUGGING LLM: Listing Available Models (to fix 404s)...")
-             for m in genai.list_models():
-                 print(f"DEBUG: Found Model: {m.name}")
-        except Exception as e:
-             print(f"DEBUG: Could not list models: {e}")
-
+        # If all failed
         raise Exception("All Gemini Models Failed")
 
     def _call_openai(self, system: str, user: str, client=None) -> str:
