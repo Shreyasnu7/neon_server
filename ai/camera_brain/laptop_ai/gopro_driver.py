@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 import os
 
+class GoProDriver:
     def __init__(self, ip=None):
         # Allow env override, default to standard GoPro IP
         self.ip = ip or os.getenv("GOPRO_IP", "10.5.5.9")

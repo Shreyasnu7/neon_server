@@ -5,7 +5,7 @@ import os
 # WebSocket relay (Railway). Use wss://... - include path your server expects (e.g. /ws/connect/<id>)
 # Example: wss://web-production-fdccc.up.railway.app/ws/connect/laptop
 # WebSocket relay (Railway). Use wss://... - include path your server expects (e.g. /ws/connect/<id>)
-VPS_WS = os.getenv("VPS_WS_URL", "wss://web-production-fdccc.up.railway.app/ws/connect/laptop")
+VPS_WS = os.getenv("VPS_WS_URL", "wss://web-production-fdccc.up.railway.app/ws/connect/laptop_vision")
 
 # HTTP server base (FastAPI endpoints)
 API_BASE = os.getenv("API_BASE", "https://web-production-fdccc.up.railway.app")

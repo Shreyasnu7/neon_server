@@ -46,3 +46,6 @@ class ShotIntentMemory:
             "recent_intents": self.episodic.recent(),
             "user_style_bias": prefs,
         }
+
+# Alias for backward compatibility
+IntentMemory = ShotIntentMemory

@@ -121,21 +121,19 @@ class UltraDirector:
         # Then flow-field blending (micro smooth avoidance)
         flow_sampler = self.flow.warp_curve(macro_safe, obstacles)
 
-        # -----------------------------
         # SAFETY ENVELOPE CHECK
         # -----------------------------
-       if not self.safety.evaluate(flow_sampler, obstacles):
-          self.active_curve = None
-          return {
-              "curve": None,
-              "mode": "unsafe_hover",
-              "duration": 1.0
-          }
+        if not self.safety.evaluate(flow_sampler, obstacles):
+            self.active_curve = None
+            return {
+                "curve": None,
+                "mode": "unsafe_hover",
+                "duration": 1.0
+            }
 
 
         # Replace Bézier curve with flow-field sampler
         self.active_curve = flow_sampler
-        self.active_curve = warped_curve
         self.curve_start_time = time.time()
         self.curve_duration = 4.0 if mode == "soft_replan" else 2.0
         self.last_target = subject_pos
