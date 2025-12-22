@@ -3,7 +3,6 @@ import os, uuid, shutil
 from fastapi import APIRouter, UploadFile, File, Form
 from api_schemas import MultimodalRequest, VideoLinkRequest
 from utils import save_json, new_job
-from fastapi import APIRouter
 from cloud_ai.plan_generator import PlanGenerator
 from cloud_ai.llm import ask_ai  # your existing LLM wrapper
 
@@ -12,6 +11,8 @@ from cloud_ai.llm import ask_ai  # your existing LLM wrapper
 #  Text → Job
 # -----------------------
 from cloud_ai.dependencies import get_orchestrator
+
+ai_router = APIRouter(tags=["AI"])
 
 @ai_router.post("/text")
 async def ai_text(req: MultimodalRequest):
@@ -26,11 +27,6 @@ async def ai_text(req: MultimodalRequest):
         video=req.video
     )
     return result
-        text=req.text,
-        user_id=req.user_id,
-        drone_id=req.drone_id
-        # brain_context can be added if we extend the request model
-    )
     return result
 
 # -----------------------

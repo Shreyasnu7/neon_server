@@ -1,15 +1,13 @@
-from fastapi import APIRouter
-from cloud_ai.orchestrator import CloudOrchestrator
-from plan_router import submit_plan
+from cloud_ai.dependencies import get_orchestrator
 from api_schemas import DronePlan
-from cloud_ai.llm import RealLLMClient
+from fastapi import APIRouter
 
 router = APIRouter(prefix="/director", tags=["AI-Command"])
-# Initialize Orchestrator with Real AI
-orchestrator = CloudOrchestrator(llm_client=RealLLMClient())
 
 @router.post("/ai/command")
 async def ai_command(payload: dict):
+    # Use Singleton Orchestrator
+    orchestrator = get_orchestrator()
     """
     Structured Pipeline: 
     Input -> Orchestrator -> Plan -> Queue
