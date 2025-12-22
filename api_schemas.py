@@ -43,11 +43,16 @@ class DronePlan(BaseModel):
 MAX_IMAGE_UPLOAD = 25
 MAX_VIDEO_SIZE_MB = 100
 
-class TextRequest(BaseModel):
+class MultimodalRequest(BaseModel):
     user_id: str
     drone_id: str
     text: str
     include_vision: bool = False
+    images: Optional[list[str]] = [] # Base64 or URLs
+    video: Optional[str] = None      # URL or path
+
+# Backward compatibility alias
+TextRequest = MultimodalRequest
 
 class VideoLinkRequest(BaseModel):
     user_id: str
