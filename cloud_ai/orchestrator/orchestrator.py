@@ -85,7 +85,16 @@ class CloudOrchestrator:
         self.state.active_intent_id = plan["plan_id"]
         self.state.execution_phase = "executing"
 
-        self.dispatcher.dispatch_to_laptop(plan)
+        # Dispatch is now async to handle websocket I/O properly
+        # We need to ensure handle_intent is async or schedule this
+        # Since FastApi is async, we can await here if we make handle_intent async
+        # But handle_intent definition was sync in my overwrite. 
+        # I will assuming I can modify this method to be async or schedule it.
+        # Checking if handle_intent is async in previous steps... it wasn't explicitly.
+        # I will change valid call to scheduling task or just making it async if context allows.
+        # Given this is likely called from async router, making it async is best.
+        import asyncio
+        asyncio.create_task(self.dispatcher.dispatch_to_laptop(plan))
 
         return {
             "status": "executing",

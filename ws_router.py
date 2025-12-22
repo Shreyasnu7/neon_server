@@ -62,7 +62,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     
     if is_drone:
         await manager.connect_drone(websocket)
-        # REGISTER DRONE WITH BRAIN
+        # REGISTER DRONE WITH BRAIN (Sync call)
         orchestrator.dispatcher.register_drone_connection(websocket)
         print("✅ Drone registered with Enterprise Brain")
     else:
