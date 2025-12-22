@@ -36,9 +36,9 @@ class CloudOrchestrator:
         if self.intent_reasoner:
             # Detect if there is real vision data (detections) in the references
             # We assume 'image_refs' might hold YOLO JSON objects in this pipeline version
-            # or we get it from 'memory_context'
+            # or we get it from 'memory_context'. Safely filter to avoid crashing on base64 strings.
             
-            vision_context = [r for r in references if r.get('type') == 'vision_detection']
+            vision_context = [r for r in references if isinstance(r, dict) and r.get('type') == 'vision_detection']
             
             try:
                 raw_intent = self.intent_reasoner.reason(
