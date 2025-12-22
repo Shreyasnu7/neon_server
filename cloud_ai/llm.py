@@ -39,11 +39,11 @@ class RealLLMClient:
         Unified chat interface.
         Returns raw JSON string response.
         """
+        last_error = "No Real AI Available" # Track the specific error
+
         # DEBUG: Verify Keys
         print(f"DEBUGGING LLM: Provider={provider}")
-        print(f"DEBUGGING LLM: Keys Present: {list(api_keys.keys())}")
-        if provider == "gemini":
-             print(f"DEBUGGING LLM: Gemini Key Length: {len(api_keys.get('gemini', '') or os.getenv('GEMINI_API_KEY', '') or '')}")
+        # print(f"DEBUGGING LLM: Keys Present: {list(api_keys.keys())}") # Privacy safe
         
         full_prompt = f"{system}\n\nUSER REQUEST:\n{user}\n\nOutput JSON only."
         
@@ -59,6 +59,7 @@ class RealLLMClient:
                     return self._call_gemini(full_prompt)
                  except Exception as e:
                     logger.error(f"Client Gemini Key Failed: {e}")
+                    last_error = f"Gemini Key Error: {e}"
              
              if self.gemini_configured:
                  return self._call_gemini(full_prompt)
@@ -70,36 +71,21 @@ class RealLLMClient:
                     return self._call_openai(system, user, client=temp_client)
                  except Exception as e:
                     logger.error(f"Client OpenAI Key Failed: {e}")
+                    if "429" in str(e): last_error = "OpenAI Quota Exceeded (Check Billing)"
+                    else: last_error = f"OpenAI Key Error: {str(e)[:50]}..."
 
              if self.openai_client:
                  return self._call_openai(system, user)
         
-        # 2. Fallback (If requested is missing, try the other)
-        # Check Env Vars first
-        if self.gemini_configured: return self._call_gemini(full_prompt)
-        if self.openai_client: return self._call_openai(system, user)
+        # 2. Fallback RE-ATTEMPT (Try the other one)
+        # ... (Simplified logic: If primary failed, we try others, but for now let's just error out to show the message)
         
-        # Check Client Keys second
-        if client_gemini_key and genai:
-            try:
-                genai.configure(api_key=client_gemini_key)
-                return self._call_gemini(full_prompt)
-            except: pass
-            
-        if client_openai_key and OpenAI:
-             try:
-                temp_client = OpenAI(api_key=client_openai_key)
-                return self._call_openai(system, user, client=temp_client)
-             except: pass
-
         # 3. Fail
-        logger.warning("⚠️ Using Fallback Mock (No Real AI Available)")
-        return self._mock_response(user)
+        logger.warning(f"⚠️ Using Fallback. Reason: {last_error}")
+        return self._mock_response(user, error=last_error)
 
     def _call_gemini(self, prompt: str) -> str:
-        if not genai:
-             logger.error("Gemini module missing")
-             return None
+        if not genai: return None
         try:
             model = genai.GenerativeModel('gemini-1.5-flash')
             response = model.generate_content(prompt)
@@ -123,20 +109,20 @@ class RealLLMClient:
             )
             return response.choices[0].message.content
         except Exception as e:
-            logger.error(f"OpenAI Error: {e}")
-            return None
+            # Let the caller handle the specific exception for better error messaging
+            raise e 
 
     def _clean_json(self, text: str) -> str:
         return text.replace("```json", "").replace("```", "").strip()
 
-    def _mock_response(self, user_input: str) -> str:
+    def _mock_response(self, user_input: str, error: str = None) -> str:
         """Simple fallback if keys are missing"""
-        # Try to parse user input to give something semi-relevant if possible, 
-        # but mostly return a safe default.
+        reason = f"System: {error}" if error else "System: AI Offline"
+        
         return json.dumps({
             "emotional_model": {"vector": {"neutral": 1.0}, "peak_allowed": True}, 
             "camera_plan": {"shot_energy": 0.5, "framing": "wide"},
-            "reasoning": "Fallback: AI Service Unavailable (Check Keys)"
+            "reasoning": reason 
         })
 
 # Legacy function alias if something still imports it
