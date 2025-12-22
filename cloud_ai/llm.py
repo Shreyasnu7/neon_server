@@ -62,35 +62,6 @@ class RealLLMClient:
         client_gemini_key = api_keys.get("gemini")
         client_openai_key = api_keys.get("openai")
         
-        # 1. Try Requested Provider First
-        if provider == "gemini":
-             if not genai:
-                 last_error = f"Lib Import Fail: {GENAI_IMPORT_ERROR or 'Unknown'}"
-                 logger.warning(last_error)
-             
-             elif client_gemini_key:
-                 try:
-                    # Configure execution...
-                    return self._call_gemini(full_prompt)
-                 except Exception as e:
-                    logger.error(f"Client Gemini Key Failed: {e}")
-                    last_error = f"Gemini Key Error: {e}"
-             
-             elif not client_gemini_key:
-                 print("DEBUGGING LLM: Client Gemini Key is MISSING/EMPTY")
-                 last_error = "Client Gemini Key Missing"
-             
-             if self.gemini_configured:
-                 return self._call_gemini(full_prompt)
-
-        elif provider == "openai":
-             if client_openai_key and OpenAI:
-                 try:
-                    temp_client = OpenAI(api_key=client_openai_key)
-                    return self._call_openai(system, user, client=temp_client)
-                 except Exception as e:
-                    logger.error(f"Client OpenAI Key Failed: {e}")
-                    if "429" in str(e): last_error = "OpenAI Quota Exceeded (Check Billing)"
                     else: last_error = f"OpenAI Key Error: {str(e)[:50]}..."
 
              if self.openai_client:
@@ -103,15 +74,11 @@ class RealLLMClient:
         logger.warning(f"⚠️ Using Fallback. Reason: {last_error}")
         return self._mock_response(user, error=last_error)
 
-    def _call_gemini(self, prompt: str) -> str:
+    def _call_gemini(self, prompt: str, api_key: str = None) -> str:
         if not genai: 
             error_msg = f"GenAI Lib Missing: {GENAI_IMPORT_ERROR or 'Unknown'}"
             logger.error(error_msg)
-            raise Exception(error_msg) # Raise to be caught by chat() loop or fallback logic
-        
-        # Free Tier Limit Strategy:
-        # Gemini 1.5 Pro Free = 2 Requests Per Minute (Too slow!)
-        # Gemini 1.5 Flash Free = 15 Requests Per Minute (Perfect for drones)
+            raise Exception(error_msg)
         
         # User strictly requested gemini-3.0-flash, but we keep backups to prevent crashes.
         models_to_try = [
@@ -119,6 +86,11 @@ class RealLLMClient:
             'gemini-2.0-flash-exp',
             'gemini-1.5-flash'
         ]
+        
+        # FORCE CONFIGURATION (Fix for 'No API_KEY' error)
+        if api_key:
+            print(f"DEBUGGING LLM: Configuring GenAI with key (Length: {len(api_key)})")
+            genai.configure(api_key=api_key)
         
         for model_name in models_to_try:
             try:
@@ -129,12 +101,11 @@ class RealLLMClient:
             except Exception as e:
                 print(f"DEBUGGING LLM: Failed {model_name} -> {e}")
                 logger.error(f"Gemini {model_name} Error: {e}")
-                if "429" in str(e): continue 
-                if "404" in str(e): continue 
-                # continue trying others even if it's another error
+                # Try next model for ANY error (Auth, 404, etc) to ensure we find a working one
+                continue
         
         # If all failed
-        return None
+        raise Exception("All Gemini Models Failed")
 
     def _call_openai(self, system: str, user: str, client=None) -> str:
         try:
