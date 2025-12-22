@@ -14,4 +14,5 @@ class PlanGenerator:
             style=ai_result.get("style", "neutral"),
             target=ai_result.get("target"),
             constraints=ai_result.get("constraints", {}),
+            reasoning=ai_result.get("reasoning", "Executing command.")
         )

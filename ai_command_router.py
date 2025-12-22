@@ -49,5 +49,6 @@ async def ai_command(payload: dict):
     return {
         "status": "queued",
         "plan": plan.dict(),
-        "used_config": config
+        "used_config": config,
+        "message": plan.reasoning or "Command queued." # Frontend will display this
     }
