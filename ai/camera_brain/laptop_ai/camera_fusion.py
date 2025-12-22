@@ -60,11 +60,42 @@ class CameraFusion:
     # FUSION LOGIC
     # ----------------------------------------------------------------------
 
+    # ----------------------------------------------------------------------
+    # FUSION LOGIC
+    # ----------------------------------------------------------------------
+
+    def select_best_source(self) -> str:
+        """
+        Decides which camera is 'Better' right now.
+        Returns: 'internal' or 'gopro'
+        """
+        score_internal = 0
+        score_gopro = 0
+        
+        # 1. Availability check
+        if self.last_internal_frame is not None: score_internal += 50
+        if self.last_gopro_frame is not None: score_gopro += 50
+        
+        # 2. Recency check (penalize stale frames > 0.5s)
+        now = time.time()
+        # Would need per-frame timestamps, ignoring for simple fusing
+        
+        # 3. Quality / Capability Bias
+        # GoPro generally has better optics
+        if self.last_gopro_frame is not None: score_gopro += 20
+        
+        # Internal has Depth/Flow metadata usually
+        if self.last_depth_map is not None: score_internal += 30
+        
+        if score_gopro > score_internal: return "gopro"
+        return "internal"
+
     def get_fusion_state(self) -> Dict[str, Any]:
         """
         Returns a standardized fusion state dictionary.
         This is consumed by AICameraBrain and camera_selector.
         """
+        best_cam = self.select_best_source()
 
         return {
             "timestamp": time.time(),
@@ -73,6 +104,7 @@ class CameraFusion:
                 "internal": self.last_internal_frame,
                 "gopro": self.last_gopro_frame
             },
+            "selected_camera": best_cam, # The Brain uses this choice
             "depth": self.last_depth_map,
             "flow": self.last_flow,
             "meta": {

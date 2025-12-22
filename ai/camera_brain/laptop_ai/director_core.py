@@ -339,16 +339,7 @@ class Director:
 
     async def _send_plan(self, job_id, user_id, drone_id, primitive, reason="ok"):
         """
-        Send plan to VPS. Packet format:
-          {
-            "target":"server",
-            "type":"ai_plan",
-            "job_id": ...,
-            "user_id": ...,
-            "drone_id": ...,
-            "primitive": { ... },
-            "meta": { "source":"laptop", "reason": "ok" }
-          }
+        Send plan to VPS with Robust Serialization.
         """
         packet = {
             "target": "server",
@@ -360,13 +351,27 @@ class Director:
             "meta": {"source": "laptop", "reason": reason, "ts": time.time()}
         }
 
-        # simulate mode: save to disk instead of sending
-        if self.simulate:
-            fname = os.path.join(TEMP_ARTIFACT_DIR, f"sim_plan_{job_id}.json")
-            with open(fname, "w") as f:
-                json.dump(packet, f, indent=2)
-            print(f"[SIM] saved plan to {fname}")
-            return
+        # ROBUST SERIALIZATION FIX
+        # Often NumPy arrays or objects sneak into the primitive/meta
+        def safe_serialize(obj):
+            if hasattr(obj, 'tolist'): return obj.tolist()
+            if hasattr(obj, '__dict__'): return obj.__dict__
+            return str(obj)
+
+        backoff = 0.1
+        for attempt in range(3):
+            try:
+                # Force serialization check BEFORE sending
+                json_str = json.dumps(packet, default=safe_serialize)
+                clean_packet = json.loads(json_str)
+                
+                await self.ws.send(clean_packet)
+                print(f"Plan sent to server (job={job_id}) attempt={attempt}")
+                return
+            except Exception as e:
+                print(f"Failed to send plan (attempt {attempt}): {e}")
+                await asyncio.sleep(backoff)
+                backoff = min(8.0, backoff * 2)
 
         # Production: send via MessagingClient (with retries)
         max_tries = 4
