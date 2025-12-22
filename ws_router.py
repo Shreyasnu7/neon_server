@@ -52,6 +52,7 @@ from cloud_ai.dependencies import get_orchestrator
 
 @ws_router.websocket("/connect/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
+    print(f"🔌 INCOMING WS CONNECTION: {client_id}")
     """
     Main Relay Logic:
     - If client_id == 'laptop_vision', it's the Drone.
