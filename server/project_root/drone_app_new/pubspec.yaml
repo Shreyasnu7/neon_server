@@ -1,0 +1,39 @@
+name: drone_app_new
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  web_socket_channel: ^2.3.0
+  http: ^0.13.6
+  win32: ^5.10.1
+  shared_preferences: ^2.1.0
+  provider: ^6.0.5
+  charts_flutter: ^0.12.0
+  flutter_tts: ^3.5.3
+  speech_to_text: ^5.6.0
+
+  # Compatible versions for Dart 3.5.3 / Flutter 3.24.3
+  share_plus: 7.2.2
+  google_maps_flutter: ^2.2.5
+  location: ^7.0.1
+  mqtt_client: ^10.0.1
+  flutter_vlc_player: ^7.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Must match Dart 3.5.3
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

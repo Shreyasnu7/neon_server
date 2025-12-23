@@ -140,7 +140,10 @@ class AIAutofocus:
 
             # Simulated blur for candidate evaluation
             blur_strength = max(0, min(15, abs(candidate - base) * 4.0))
-            blur_img = cv2.GaussianBlur(gray, (0, 0), blur_strength)
+            if blur_strength > 0.1:
+                blur_img = cv2.GaussianBlur(gray, (0, 0), blur_strength)
+            else:
+                blur_img = gray
 
             sharp = self.compute_sharpness(blur_img)
             if sharp > best_sharp:
@@ -725,6 +728,50 @@ class AIAutofocus:
         )
 
         return af_info
+
+    # ===================================================================
+    #      COMPATIBILITY LAYER (Adapts to AI Camera Brain API)
+    # ===================================================================
+    def analyze_frame(self, frame, detections=None):
+        """
+        Compatibility alias for AI Camera Brain.
+        Maps to autofocus_step.
+        """
+        vision_context = {"detections": detections or []}
+        return self.autofocus_step(frame, vision_context)
+
+    def decide_focus_command(self, af_info):
+        """
+        Compatibility alias. The logic is already in analyze_frame/autofocus_step.
+        """
+        return af_info
+
+    def smooth_update(self, af_cmd):
+        """
+        Compatibility alias. Smoothing is already applied in update().
+        """
+        return af_cmd
+        
+    def compute_focus(self, frame, subject_box, subject_dist):
+        """
+        Internal helper used by autofocus_step.
+        Maps to the main update() logic.
+        """
+        # Convert list bbox [x1, y1, x2, y2] to dict expected by update()
+        formatted_box = None
+        if subject_box is not None and len(subject_box) >= 4:
+            x1, y1, x2, y2 = subject_box[:4]
+            w = x2 - x1
+            h = y2 - y1
+            formatted_box = {
+                "x": x1,
+                "y": y1,
+                "w": w,
+                "h": h,
+                "distance": subject_dist if subject_dist is not None else 0.0
+            }
+        
+        return self.update(frame, subject_box=formatted_box)
 
     # ===================================================================
     #      FILE COMPLETE — END OF ai_autofocus.py

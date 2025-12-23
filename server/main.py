@@ -1,34 +1,50 @@
-from fastapi import FastAPI, WebSocket
-import json
+# server/main.py
 
-app = FastAPI()
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-RADXA = None
-
-@app.websocket("/radxa")
-async def radxa_ws(ws: WebSocket):
-    global RADXA
-    await ws.accept()
-    RADXA = ws
-    print("Radxa connected")
-
-    try:
-        while True:
-            msg = await ws.receive_text()
-            print("From Radxa:", msg)
-    except:
-        RADXA = None
-        print("Radxa disconnected")
+from ai_router import ai_router
+from memory_router import memory_router
+from plan_router import plan_router
+from ws_router import ws_router
 
 
-@app.websocket("/control")
-async def control_ws(ws: WebSocket):
-    await ws.accept()
-    print("Control connected")
+from ai_command_router import router as ai_command_router
 
-    while True:
-        cmd = await ws.receive_text()
-        print("Command:", cmd)
 
-        if RADXA:
-            await RADXA.send_text(cmd)
+app = FastAPI(
+    title="AI Drone Server (V3)",
+    version="1.0"
+)
+
+# Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Routers
+app.include_router(ai_router, prefix="/ai")
+app.include_router(memory_router, prefix="/memory")
+app.include_router(plan_router, prefix="/plan")
+app.include_router(ws_router, prefix="/ws")
+app.include_router(ai_command_router)
+
+# Health check
+@app.get("/")
+def root():
+    return {
+        "status": "AI Drone Server Running",
+        "version": "1.0"
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    import sys
+    import os
+    # Add project root to path so 'cloud_ai' and 'ai' can be imported
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    uvicorn.run(app, host="0.0.0.0", port=8000)

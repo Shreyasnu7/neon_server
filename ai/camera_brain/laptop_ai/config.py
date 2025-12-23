@@ -28,6 +28,7 @@ RTSP_URL = int(_rtsp) if _rtsp.isdigit() else _rtsp
 # Performance config
 AI_CALL_INTERVAL = 4.0   # seconds between full AI cloud calls for same job
 FRAME_SKIP = 2           # process every Nth frame for vision (increase to save CPU)
+TEMPORAL_SMOOTHING = 0.5 # Smoothing factor for vision tracks (0.0=raw, 1.0=frozen)
 
 # artifact dir
 TEMP_ARTIFACT_DIR = "./artifacts"

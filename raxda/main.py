@@ -183,6 +183,29 @@ async def cloud_loop():
                                 # but usually we reply to whoever sent us data.
                                 pass 
                                 
+                            # 3. AI PLAN EXECUTION (Critical Missing Link)
+                            elif mtype == "ai_plan":
+                                primitive = data.get("primitive", {})
+                                action = primitive.get("action")
+                                print(f"🤖 AI CMD: {action}")
+                                
+                                if action == "HOVER":
+                                    send_velocity(0, 0, 0, 0)
+                                    set_mode("GUIDED")
+                                    
+                                elif action == "FOLLOW":
+                                    # Simple execution: Move forward slowly
+                                    # Real implementation needs visual visual servoing here
+                                    # For now, we trust the Laptop Brain is sending velocity in 'params'
+                                    # OR we just drift forward
+                                    p = primitive.get("params", {})
+                                    vx = p.get("vx", 0.5) 
+                                    send_velocity(vx, 0, 0, 0)
+                                    set_mode("GUIDED")
+                                    
+                                elif action == "LAND":
+                                    set_mode("LAND") 
+                                
                         elif msg.type == aiohttp.WSMsgType.ERROR:
                             break
                             

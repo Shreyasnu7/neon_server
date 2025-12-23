@@ -32,7 +32,18 @@ async def ai_command(payload: dict):
     # or we set it on the LLM client here if it was stateful (it's stateless, so we assume client handles env vars or we pass context)
     
     # We pass the config into the context for the Orchestrator/LLM
-    plan_result = await orchestrator.process_request(payload)
+    # process_multimodal_request(text, user_id, drone_id, images=None, video=None)
+    
+    # Extract text from payload or default
+    text_prompt = payload.get("text", "Execute autonomous behavior")
+    
+    plan_result = await orchestrator.process_multimodal_request(
+        text=text_prompt,
+        user_id="default_user", # TODO: Extract from auth token
+        drone_id="default_drone",
+        images=payload.get("media"), # Assuming list of base64
+        brain_context=config
+    )
     
     # 3. Ensure it matches DronePlan schema
     if isinstance(plan_result, dict):
