@@ -57,7 +57,7 @@ class CloudOrchestrator:
         if "brain_context" in telemetry:
              self.state.metadata["last_brain_context"] = json.dumps(telemetry["brain_context"])
 
-    def process_multimodal_request(self, text, user_id, drone_id, images=None, video=None, brain_context=None):
+    async def process_multimodal_request(self, text, user_id, drone_id, images=None, video=None, brain_context=None):
         """
         Full Pipeline: User -> LLM -> Validation -> Plan -> Dispatch.
         """
