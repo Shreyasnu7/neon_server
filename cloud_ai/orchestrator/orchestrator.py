@@ -73,7 +73,6 @@ class CloudOrchestrator:
             user_text=text,
             image_refs=vision_refs,
             memory_context={"laptop_brain": brain_context or {}}, # Deep wiring
-            memory_context={"laptop_brain": brain_context or {}}, # Deep wiring
             api_keys={"gemini": api_key} if api_key else {}
         )
 
