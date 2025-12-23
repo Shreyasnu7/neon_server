@@ -21,6 +21,7 @@ class ExecutionPlanner:
             # DEEP LOGIC: We translate "Orbit" and "Follow" into actual metadata
             # The Laptop/Radxa will convert these into raw MAVLink points.
             "maneuver": self._derive_maneuver(shot_intent),
+            "action": self._derive_maneuver(shot_intent)["type"], # HOISTING FOR SCHEMA COMPLIANCE
             "stages": [
                 {
                     "stage": "approach",

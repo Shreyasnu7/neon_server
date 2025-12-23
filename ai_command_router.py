@@ -37,8 +37,21 @@ async def ai_command(payload: dict):
     # Extract text from payload or default
     text_prompt = payload.get("text", "Execute autonomous behavior")
     
-    # Extract api_key if provided
-    api_key = payload.get("api_key")
+    # Extract api_key if provided (Robust Check)
+    # App might send: api_key, apiKey, key, gemini_api_key
+    api_key = (
+        payload.get("api_key") or 
+        payload.get("apiKey") or 
+        payload.get("key") or 
+        payload.get("gemini_api_key")
+    )
+    
+    # DEBUG PAYLOAD KEYS (Security: Don't print values)
+    print(f"DEBUG: /director/ai/command Payload Keys: {list(payload.keys())}")
+    if api_key:
+        print(f"DEBUG: Found API Key (Length: {len(api_key)})")
+    else:
+        print("DEBUG: NO API KEY FOUND IN PAYLOAD")
 
     # Pass api_key to orchestrator
     plan_result = await orchestrator.process_multimodal_request(

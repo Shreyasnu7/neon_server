@@ -55,6 +55,7 @@ class ShotIntentReasoner:
                 "motion_energy": 0.1,  # Conservative fallback
                 "risk_tolerance": 0.0, # Safe fallback
                 "shot_type": "hover",  # Safe fallback
+                "action": "HOVER",     # REQUIRED BY SCHEMA
                 "reasoning": "Fallback: AI Service Unavailable."
             }
 
