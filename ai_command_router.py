@@ -1,6 +1,7 @@
 from cloud_ai.dependencies import get_orchestrator
 from api_schemas import DronePlan
 from fastapi import APIRouter
+from plan_router import submit_plan
 
 router = APIRouter(prefix="/director", tags=["AI-Command"])
 
@@ -38,13 +39,23 @@ async def ai_command(payload: dict):
     text_prompt = payload.get("text", "Execute autonomous behavior")
     
     # Extract api_key if provided (Robust Check)
-    # App might send: api_key, apiKey, key, gemini_api_key
-    api_key = (
+    # App might send: api_key, apiKey, key, gemini_api_key, api_keys={"gemini": ...}
+    
+    # 1. Direct Keys
+    direct_key = (
         payload.get("api_key") or 
         payload.get("apiKey") or 
         payload.get("key") or 
         payload.get("gemini_api_key")
     )
+
+    # 2. Nested Keys (api_keys)
+    nested_keys = payload.get("api_keys", {})
+    nested_key = None
+    if isinstance(nested_keys, dict):
+        nested_key = nested_keys.get("gemini") or nested_keys.get("google")
+
+    api_key = direct_key or nested_key
     
     # DEBUG PAYLOAD KEYS (Security: Don't print values)
     print(f"DEBUG: /director/ai/command Payload Keys: {list(payload.keys())}")
