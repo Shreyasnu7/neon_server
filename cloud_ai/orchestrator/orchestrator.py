@@ -57,7 +57,7 @@ class CloudOrchestrator:
         if "brain_context" in telemetry:
              self.state.metadata["last_brain_context"] = json.dumps(telemetry["brain_context"])
 
-    async def process_multimodal_request(self, text, user_id, drone_id, images=None, video=None, brain_context=None):
+    async def process_multimodal_request(self, text, user_id, drone_id, images=None, video=None, brain_context=None, api_key=None):
         """
         Full Pipeline: User -> LLM -> Validation -> Plan -> Dispatch.
         """
@@ -72,7 +72,9 @@ class CloudOrchestrator:
         raw_intent = self.reasoner.reason(
             user_text=text,
             image_refs=vision_refs,
-            memory_context={"laptop_brain": brain_context or {}} # Deep wiring
+            memory_context={"laptop_brain": brain_context or {}}, # Deep wiring
+            memory_context={"laptop_brain": brain_context or {}}, # Deep wiring
+            api_keys={"gemini": api_key} if api_key else {}
         )
 
         # 3. Strict Validation (IntentBuilder)
@@ -120,7 +122,7 @@ class CloudOrchestrator:
 
         return {
             "status": "executing",
-            "plan_id": plan["plan_id"],
+            **plan # Returning the full plan ensures 'action' and 'params' are present for validation
         }
 
     def handle_human_override(self):

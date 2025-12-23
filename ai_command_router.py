@@ -37,12 +37,17 @@ async def ai_command(payload: dict):
     # Extract text from payload or default
     text_prompt = payload.get("text", "Execute autonomous behavior")
     
+    # Extract api_key if provided
+    api_key = payload.get("api_key")
+
+    # Pass api_key to orchestrator
     plan_result = await orchestrator.process_multimodal_request(
         text=text_prompt,
-        user_id="default_user", # TODO: Extract from auth token
+        user_id="default_user", 
         drone_id="default_drone",
-        images=payload.get("media"), # Assuming list of base64
-        brain_context=config
+        images=payload.get("media"), 
+        brain_context=config,
+        api_key=api_key
     )
     
     # 3. Ensure it matches DronePlan schema
