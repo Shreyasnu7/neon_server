@@ -10,6 +10,7 @@ class DronePlan(BaseModel):
     style: Optional[str] = "neutral"
     target: Optional[str] = None
     constraints: Optional[Dict[str, Any]] = {}
+    reasoning: Optional[str] = None # AI Explanation for the user
 
 MAX_IMAGE_UPLOAD = 25
 MAX_VIDEO_SIZE_MB = 100

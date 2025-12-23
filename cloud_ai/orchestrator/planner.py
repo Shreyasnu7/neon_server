@@ -19,9 +19,9 @@ class ExecutionPlanner:
             "plan_id": str(uuid.uuid4()),
             "intent_signature": shot_intent,
             # DEEP LOGIC: We translate "Orbit" and "Follow" into actual metadata
-            # The Laptop/Radxa will convert these into raw MAVLink points.
             "maneuver": self._derive_maneuver(shot_intent),
             "action": self._derive_maneuver(shot_intent)["type"], # HOISTING FOR SCHEMA COMPLIANCE
+            "reasoning": shot_intent.get("reasoning", "Autonomous Action"), # PASS EXPLANATION
             "stages": [
                 {
                     "stage": "approach",
