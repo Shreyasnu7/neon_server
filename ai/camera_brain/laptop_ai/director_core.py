@@ -29,6 +29,7 @@ import traceback
 import cv2
 import numpy as np
 import threading
+import aiohttp # NEW
 from ultralytics import YOLO
 from typing import Optional, List, Dict, Any
 
@@ -127,8 +128,46 @@ class ThreadedYOLO:
         self.ws.add_recv_handler(self._handle_packet)
         # Start the continuous vision/streaming loop
         asyncio.create_task(self._vision_streaming_loop())
+        # Start Polling for Plans (Server Disk -> Laptop)
+        asyncio.create_task(self._poll_for_jobs()) 
         print("Director: connected to messaging service and vision loop started.")
         self.autopilot.connect()
+
+    async def _poll_for_jobs(self):
+        """
+        Periodically poll the server for new AI plans.
+        """
+        from laptop_ai.config import API_BASE
+        
+        print(f"📡 Polling {API_BASE}/plan/next for jobs...")
+        
+        async with aiohttp.ClientSession() as session:
+            while True:
+                try:
+                    async with session.get(f"{API_BASE}/plan/next") as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            if data and data.get("plan"):
+                                print(f"✨ NEW PLAN RECEIVED: {data['plan']}")
+                                await self._execute_plan(data['plan'])
+                except Exception as e:
+                    print(f"Polling Error: {e}")
+                
+                await asyncio.sleep(2.0) # Poll every 2 seconds
+
+    async def _execute_plan(self, plan: dict):
+        """
+        Execute the fetched plan. 
+        """
+        action = plan.get("action", "hover")
+        print(f"🎬 EXECUTING ACTION: {action}")
+        # Map to Autopilot Command
+        if action == "takeoff":
+            self.autopilot.takeoff()
+        elif action == "land":
+            self.autopilot.land()
+        elif action == "rth":
+            self.autopilot.rth()
 
     async def _vision_streaming_loop(self):
         """
