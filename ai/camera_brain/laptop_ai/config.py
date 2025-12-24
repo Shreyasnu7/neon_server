@@ -5,10 +5,10 @@ import os
 # WebSocket relay (Railway). Use wss://... - include path your server expects (e.g. /ws/connect/<id>)
 # Example: wss://web-production-fdccc.up.railway.app/ws/connect/laptop
 # WebSocket relay (Railway). Use wss://... - include path your server expects (e.g. /ws/connect/<id>)
-VPS_WS = os.getenv("VPS_WS_URL", "wss://web-production-fdccc.up.railway.app/ws/connect/laptop_vision")
+VPS_WS = os.getenv("VPS_WS_URL", "wss://drone-server-r0qe.onrender.com/ws/connect/laptop_vision")
 
 # HTTP server base (FastAPI endpoints)
-API_BASE = os.getenv("API_BASE", "https://web-production-fdccc.up.railway.app")
+API_BASE = os.getenv("API_BASE", "https://drone-server-r0qe.onrender.com")
 
 # Shared secret token (must match server)
 AUTH_TOKEN = os.getenv("AUTH_TOKEN", "SUPER_SECRET_DRONE_KEY_123")
