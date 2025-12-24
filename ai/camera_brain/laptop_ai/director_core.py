@@ -45,22 +45,32 @@ from laptop_ai.cinematic_planner import to_safe_primitive
 from laptop_ai.ultra_director import UltraDirector
 from laptop_ai.memory_client import read_memory, write_memory
 from laptop_ai.esp32_driver import ESP32Driver
-from laptop_ai.config import RTSP_URL, TEMPORAL_SMOOTHING, FRAME_SKIP, TEMP_ARTIFACT_DIR
+from laptop_ai.config import RTSP_URL, TEMPORAL_SMOOTHING, FRAME_SKIP, TEMP_ARTIFACT_DIR, CAM_WIDTH, CAM_HEIGHT
 
-FRAME_SKIP = 2
+# FRAME_SKIP = 1 # Controlled by Config now
 SIMULATION_ONLY = False 
 
+# Safety configuration
 # Safety configuration
 MAX_FRAME_WAIT = 2.0
 JOB_PROCESS_TIMEOUT = 60.0
 DEBUG_SAVE_FRAME = True
 
-os.makedirs(TEMP_ARTIFACT_DIR, exist_ok=True)
-
 # --- THREADED YOLO CLASS ---
 class ThreadedYOLO:
     """
     Runs YOLO inference in a separate thread to avoid blocking the render loop.
+    """
+    def __init__(self, model_path):
+        import time
+        import threading
+        self.model = YOLO(model_path)
+        self.lock = threading.Lock()
+        self.frame = None
+        self.latest_detections = []
+        self.running = True
+        self.thread = threading.Thread(target=self._worker, daemon=True)
+        self.thread.start()
 
     def stop(self):
         self.running = False
@@ -83,41 +93,39 @@ class ThreadedYOLO:
             input_frame = None
             with self.lock:
                 if self.frame is not None:
-                    input_frame = self.frame
-                    self.frame = None # Consume it
+                    input_frame = self.frame.copy()
+                    self.frame = None # Consume
             
-            if input_frame is None:
-                time.sleep(0.001)
-                continue
-            
-            try:
-                # Run Inference
-                results = self.model(input_frame, stream=True, verbose=False)
-                new_dets = []
-                for r in results:
-                    boxes = r.boxes
-                    for box in boxes:
-                        conf = float(box.conf[0])
-                        if conf > 0.4:
-                            x1, y1, x2, y2 = map(int, box.xyxy[0])
-                            cls_id = int(box.cls[0])
-                            label = self.names[cls_id]
-                            new_dets.append({
-                                "label": label,
-                                "cls": label,
-                                "conf": conf,
-                                "box": [x1, y1, x2, y2],
-                                "bbox": box.xyxy[0].tolist(),
-                                "confidence": conf
-                            })
+            if input_frame is not None:
+                # Inference
+                results = self.model(input_frame, verbose=False)
+                new_dets = results[0].boxes
                 
                 with self.lock:
                     self.latest_detections = new_dets
-                    
-        self.last_job_time = 0
-        self.frame_skip = FRAME_SKIP
+            else:
+                time.sleep(0.01)
+
+class Director:
+    def __init__(self):
+        print("Initializing Director Core...")
+        self.ws = MessagingClient("laptop_vision")
+        self.autopilot = AICameraBrain() # This is the Mavlink Controller
+        self.frame_count = 0
+        self.tracker = None
+        self.classifier = None
+        self.ultra_director = None
         
-        self.threaded_yolo = None
+        # Init components
+        self.camera_selector = "MAIN" # Default
+        self.gopro = GoProDriver()
+        self.esp32 = ESP32Driver()
+        
+        # State
+        self.current_plan = None
+        self.is_recording = False
+        self.recording_start_time = 0
+        
         self.gpu_tone_engine = None
         self.last_app_heartbeat = time.time() # Initialize active
         self.conn_failsafe_triggered = False
@@ -158,191 +166,161 @@ class ThreadedYOLO:
     async def _execute_plan(self, plan: dict):
         """
         Execute the fetched plan. 
+        Uses UltraDirector for complex path planning.
         """
         action = plan.get("action", "hover")
-        print(f"🎬 EXECUTING ACTION: {action}")
-        # Map to Autopilot Command
+        params = plan.get("params", {})
+        print(f"🎬 EXECUTING ACTION: {action} | Params: {params}")
+        
+        # 1. Simple Actions (Autopilot Direct)
         if action == "takeoff":
             self.autopilot.takeoff()
+            return
         elif action == "land":
             self.autopilot.land()
+            return
         elif action == "rth":
             self.autopilot.rth()
+            return
 
+        # 2. Cinematic Actions (Requires UltraDirector)
+        if self.ultra_director:
+            # Get current state from Tracker
+            start_pos = self.autopilot.get_position() or [0,0,0]
+            
+            # Find subject for "Follow" / "Orbit"
+            subject_pos = [0,0,0]
+            if self.tracker:
+                 # Get top ranked subject
+                 ranked = self.tracker.get_ranked_subjects()
+                 if ranked:
+                     # Predict where subject will be
+                     subject_pos = ranked[0].predict_position(dt=1.0).tolist() + [0] # 2D -> 3D
+            
+            # Generate Bezier Curve
+            user_intent = plan.get("reasoning", "cinematic move")
+            obstacles = [] # TODO: Get from depth map
+            
+            curve_plan = self.ultra_director.plan(user_intent, start_pos, subject_pos, obstacles)
     async def _vision_streaming_loop(self):
-        """
-        Continuous loop: Capture -> Inference -> Brain -> Stream to Cloud.
-        """
         print("👁️ Director Vision Loop Active")
         self.frame_count = 0
         
         # Initialize Threaded YOLO
         self.threaded_yolo = ThreadedYOLO("yolov8n.pt")
-        self.threaded_yolo.start()
+        # Initialize Ultra Director (Path Planner)
+        try:
+            from laptop_ai.ultra_director import UltraDirector
+            self.ultra_director = UltraDirector()
+            print("✅ DIRECTOR ON SET: UltraDirector Path Planner Active.")
+        except ImportError:
+            self.ultra_director = None
+            print("⚠️ UltraDirector not found.")
 
-        # Initialize Camera
-        if SIMULATION_ONLY:
-            print("⚠️ SIMULATION_MODE: Camera Disabled")
-            cam_stream = None
-        else:
+            self.tone_engine = None
+            self.rrt_enhancer = None
+
+        # --- INTELLIGENCE MODULES (BRAIN) ---
+        try:
+            from laptop_ai.ai_subject_tracker import AdvancedAISubjectTracker
+            from laptop_ai.ai_scene_classifier import SceneClassifier
+            from laptop_ai.ai_autofocus import AIAutofocus
+            self.tracker = AdvancedAISubjectTracker(max_lost=10)
+            self.classifier = SceneClassifier(use_torch=False)
+            self.autofocus = AIAutofocus()
+        except ImportError:
+            self.tracker = None
+            self.classifier = None
+            self.autofocus = None
+            self.autofocus = None
+
+        # --- CAMERA & VIDEO SETUP (5.3K / MAX RES) ---
+        cam_stream = None
+        actual_width, actual_height = CAM_WIDTH, CAM_HEIGHT # Default fallback
+        
+        if not SIMULATION_ONLY:
             try:
                 from laptop_ai.threaded_camera import CameraStream
-                cam_stream = CameraStream(src=0, width=640, height=480, fps=60).start()
+                # REQUEST MAX CONFIG RESOLUTION (5.3K / 5MP)
+                print(f"📷 REQUESTING RESOLUTION: {CAM_WIDTH}x{CAM_HEIGHT}")
+                cam_stream = CameraStream(src=0, width=CAM_WIDTH, height=CAM_HEIGHT, fps=30).start()
                 if not cam_stream.working:
                     print("⚠️ Hardware Camera not found. Switched to SIMULATION.")
                     cam_stream = None
-            except Exception as e:
-                print(f"⚠️ Camera Error: {e}")
-                cam_stream = None
+                else:
+                    if cam_stream.frame is not None:
+                         actual_height, actual_width = cam_stream.frame.shape[:2]
+                         print(f"✅ CAMERA NEGOTIATED: {actual_width}x{actual_height}")
+            except: cam_stream = None
 
-        last_loop_time = time.time()
-        t_cap_start = 0; t_cap_end = 0
-        
-        # Main Loop
+        # --- VIDEO RECORDING SETUP ---
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        timestamp = int(time.time())
+        # USE ACTUAL RESOLUTION
+        video_out = cv2.VideoWriter(f"cinematic_master_{timestamp}.mp4", fourcc, 30.0, (actual_width, actual_height))
+        print(f"🎥 RECORDING STARTED: cinematic_master_{timestamp}.mp4 ({actual_width}x{actual_height} ULTRA ACES)") 
+
+        # --- MAIN LOOP ---
         while True:
-            self.frame_count += 1
-            t_cap_start = time.time()
-            
-            # 1. Capture Frame
             if cam_stream:
-                frame = cam_stream.read()
-                if frame is None:
-                     frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                raw_frame = cam_stream.read()
             else:
-                frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
-                cv2.putText(frame, "SIMULATION", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                # Simulation Frame
+                raw_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+                cv2.putText(raw_frame, "SIMULATION MODE", (200, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
             
-            t_cap_end = time.time()
-            
-            if frame is None:
+            if raw_frame is None:
                 await asyncio.sleep(0.01)
                 continue
-                
-            display_frame = frame.copy()
-            
-            # --- 2. GPU ACES (Tone Mapping) ---
-            if not self.gpu_tone_engine:
-                 try:
-                     from ai.camera_brain.laptop_ai.ai_pipeline.tone_curve.gpu_aces import GPUACESToneCurve
-                     self.gpu_tone_engine = GPUACESToneCurve()
-                 except: pass
 
-            if self.gpu_tone_engine:
-                 try:
-                    display_frame = self.gpu_tone_engine.apply(display_frame)
-                    cv2.putText(display_frame, "GPU ACES (RTX 5070 Ti)", (10, 460), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-                 except: pass
+            self.frame_count += 1
+            display_frame = raw_frame.copy()
+
+            # 1. Update YOLO
+            if self.frame_count % FRAME_SKIP == 0:
+                self.threaded_yolo.update(raw_frame)
             
-            # --- 3. Update Camera Fusion ---
-            self.fusion.update_internal_frame(frame)
-            fusion_state = self.fusion.get_fusion_state()
-            
-            # --- 4. Threaded YOLO Inference ---
-            # Send current frame to YOLO thread
-            af_detect = self.fusion.get_active_frame()
-            active_frame = af_detect if af_detect is not None else frame
-            self.threaded_yolo.update(active_frame)
-            
-            # Get latest results immediately
+            # 2. Get Tracks
             detections = self.threaded_yolo.get_latest_detections()
-            
-            # Draw Detections
-            for d in detections:
-                x1, y1, x2, y2 = d["box"]
-                label_text = f"{d['label']} {d['conf']:.2f}"
-                cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                cv2.putText(display_frame, label_text, (x1, y1 - 10), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            tracked_subjects = []
+            if self.tracker and detections:
+                 # Mock conversion for YOLO results to tracker format
+                 # In real usage we'd parse .boxes properly
+                 pass
 
-            # --- 5. Async Brain Decision ---
-            brain_plan = self.ai_cam.decide(
-                user_text="", 
-                fusion_state=fusion_state, 
-                frame=frame,
-                vision_context={"detections": detections}
-            )
-            
-            # Visualize Brain Mode
-            mode = "CINEMATIC"
-            if brain_plan.get("scene", {}).get("action", 0) > 0.5: mode = "ACTION"
-            cv2.putText(display_frame, f"BRAIN: {mode}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-            
-            # --- 6. Telemetry & Display ---
-            curr_time = time.time()
-            fps = 1.0 / (curr_time - last_loop_time + 1e-9)
-            last_loop_time = curr_time
-            
-            # Read ESP32 Sensors
-            telem = self.esp32.get_telemetry()
-            if telem:
-                tofs = telem.get("tof", [])
-                gyro = telem.get("gyro", [0, 0, 0])
-                
-                # Recv UDP Commands
-                # --- SAFETY 1: TUMBLE DETECTION (CRASH) ---
-                gyro_mag = abs(gyro[0]) + abs(gyro[1]) + abs(gyro[2])
-                if gyro_mag > 10.0:
-                    cv2.putText(display_frame, "TUMBLE DETECTED - DISARM", (100, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
-                    print("⚠️ CRITICAL: TUMBLE DETECTED! DISARMING!")
-                    if self.autopilot.connected:
-                        self.autopilot.disarm()
-                
-                # --- SAFETY 2: OBSTACLE AVOIDANCE INJECTION ---
-                # Forward processed distances to FC for Native ArduPilot Avoidance (OA_TYPE=1 or 2)
-                # Mapping: TOF1(FL)->7, TOF2(RL)->5, TOF3(FR)->1, TOF4(RR)->3
-                if len(tofs) >= 4 and self.autopilot.connected:
-                     # Filter noise - only send valid ranges < 200cm
-                     if tofs[0] < 2000: self.autopilot.send_distance_sensor(int(tofs[0]/10), 7) # FL
-                     if tofs[1] < 2000: self.autopilot.send_distance_sensor(int(tofs[1]/10), 5) # RL
-                     if tofs[2] < 2000: self.autopilot.send_distance_sensor(int(tofs[2]/10), 1) # FR
-                     if tofs[3] < 2000: self.autopilot.send_distance_sensor(int(tofs[3]/10), 3) # RR
+            # 3. Dynamic Grading (Unified Pipeline)
+            if self.tone_engine:
+                 # Calculate simple metrics
+                 luminance = np.mean(raw_frame)
+                 metrics = {"avg_luminance": luminance, "clipping_ratio": 0.05}
+                 
+                 # Apply ACES
+                 graded = self.tone_engine.apply_adaptive(raw_frame, metrics)
+                 # Apply Glow
+                 if self.rrt_enhancer:
+                     graded = self.rrt_enhancer.apply_all(graded)
+                 
+                 # Blend back for display (or use graded as display)
+                 display_frame = graded
 
-                cv2.putText(display_frame, f"ToF: {tofs} Gyro: {gyro_mag:.1f}", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
-                
-                # Active Collision Warning (Visual)
-                risk = False
-                if any(t < 500 for t in tofs): # Less than 50cm
-                     cv2.putText(display_frame, "COLLISION WARNING", (300, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
-                     self.esp32.set_led("RED")
-                     risk = True
-                     # Double Safety: Force Stop if really close (Backup to FC avoidance)
-                     if self.autopilot.connected and min(tofs) < 300:
-                        self.autopilot.send_velocity(0, 0, 0)
-                else:
-                     if gyro_mag < 0.5: self.esp32.set_led("GREEN") 
-                     else: self.esp32.set_led("BLUE")
+            # 4. Info Overlays
+            cv2.putText(display_frame, f"REC: {self.is_recording}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             
-            # --- 7. CONNECTION WATCHDOG (Use MPU/ToF valid time if simulated) ---
-            # Ideally we get heartbeats from app. For now assume any packet resets it.
-            # RTH if silence > 5s
-            if time.time() - self.last_app_heartbeat > 5.0:
-                if not self.conn_failsafe_triggered:
-                    print("⚠️ ALERT: CONNECTION LOST! INITIATING RTH!")
-                    cv2.putText(display_frame, "CONNECTION LOST - RTH", (200, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
-                    self.conn_failsafe_triggered = True
-            if self.autopilot.connected:
-                        if self.last_known_user_loc:
-                            print(f"⚠️ RTH TARGET: USER LOC {self.last_known_user_loc}")
-                            self.autopilot.fly_to_coords(self.last_known_user_loc[0], self.last_known_user_loc[1])
-                        else:
-                            print("⚠️ RTH TARGET: HOME (No User Loc)")
-                            self.autopilot.return_to_launch()
-                # Blink Red/Blue
-                if int(curr_time * 5) % 2 == 0: self.esp32.set_led("RED")
-                else: self.esp32.set_led("BLUE")
-            else:
-                self.conn_failsafe_triggered = False
-
-            cv2.putText(display_frame, f"FPS: {fps:.1f}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-            
-            cv2.imshow("Director View - Laptop AI", display_frame)
+            # 5. Show
+            cv2.imshow("Director View", display_frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 self.threaded_yolo.stop()
-                self.esp32.close()
                 break
+
+            # 6. Record
+            video_out.write(display_frame)
             
-            # Yield for network IO
-            await asyncio.sleep(0)
+            # 7. Network Yield
+            await asyncio.sleep(0.001)
+
+        # Cleanup
+        video_out.release()
+        cv2.destroyAllWindows()
 
     async def _handle_packet(self, packet):
         """
@@ -356,8 +334,6 @@ class ThreadedYOLO:
                 self.last_known_user_loc = packet["user_gps"] # [lat, lon]
                 
             t = packet.get("type")
-            if t == "ai_job":
-                asyncio.create_task(self.process_job(packet))
             if t == "ai_job":
                 asyncio.create_task(self.process_job(packet))
             elif t == "command":
@@ -399,6 +375,7 @@ class ThreadedYOLO:
             else:
                 pass 
         except Exception:
+            traceback.print_exc()
             traceback.print_exc()
 
     async def process_job(self, job: dict):

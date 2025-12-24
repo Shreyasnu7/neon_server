@@ -136,10 +136,24 @@ class AICameraBrain:
 
         print("✅ Brain Loaded. Starting Background Cortex...")
 
-        # --- ASYNC STATE ---
-        self.running = True
-        self.input_lock = threading.Lock()
         self.output_lock = threading.Lock()
+        
+        # --- MAVLINK (BODY) ---
+        self.mav = None
+        self.connected = False
+        self.boot_time = time.time()
+        self.connection_string = "/dev/ttyAML0" # Default Radxa UART
+        self.baud = 57600
+        
+        try:
+            from pymavlink import mavutil
+            self.mavutil = mavutil
+            print("✅ Mavlink Library Loaded.")
+        except ImportError:
+            self.mavutil = None
+            print("⚠️ Pymavlink not installed. Flight Control disabled.")
+            
+        self.default_specs = {
         
         self.default_specs = {
             "fps": 60,
@@ -374,9 +388,95 @@ class AICameraBrain:
         
         return plan
 
-if __name__ == "__main__":
-    b = AICameraBrain()
-    print("Running Brain Test...")
-    time.sleep(2)
-    b.stop()
-    print("Done")
+        
+        return plan
+
+    # -------------------------------------------------------------------------
+    # FLIGHT CONTROL (BODY) ACTIONS
+    # -------------------------------------------------------------------------
+    def connect(self):
+        """
+        Connect to the Flight Controller (Pixhawk/Cube) via connection_string.
+        """
+        if not self.mavutil: return
+        
+        print(f"🔌 Connecting to Flight Controller on {self.connection_string} ({self.baud})...")
+        try:
+            # On Windows/Sim, might need "udp:127.0.0.1:14550"
+            if "COM" in self.connection_string or "/dev" in self.connection_string:
+                 self.mav = self.mavutil.mavlink_connection(self.connection_string, baud=self.baud)
+            else:
+                 # Default fallback for testing
+                 self.mav = self.mavutil.mavlink_connection("udp:127.0.0.1:14550")
+                 
+            self.mav.wait_heartbeat(timeout=3)
+            print("✅ Flight Controller Connected (Heartbeat Received)")
+            self.connected = True
+        except Exception as e:
+            print(f"⚠️ FC Connection Failed: {e}")
+            self.connected = False
+
+    def takeoff(self, alt=5):
+        if not self.connected: return
+        print(f"🛫 TAKEOFF COMMAND ({alt}m)")
+        # Set Mode Guided
+        self._set_mode("GUIDED")
+        # Arm
+        self.mav.mav.command_long_send(
+            self.mav.target_system, self.mav.target_component,
+            self.mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
+            0, 1, 0, 0, 0, 0, 0, 0)
+        time.sleep(1)
+        # Takeoff
+        self.mav.mav.command_long_send(
+            self.mav.target_system, self.mav.target_component,
+            self.mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
+            0, 0, 0, 0, 0, 0, 0, alt)
+
+    def land(self):
+        if not self.connected: return
+        print("🛬 LAND COMMAND")
+        self.mav.mav.command_long_send(
+            self.mav.target_system, self.mav.target_component,
+            self.mavutil.mavlink.MAV_CMD_NAV_LAND,
+            0, 0, 0, 0, 0, 0, 0, 0)
+            
+    def rth(self):
+        if not self.connected: return
+        print("🏠 RTH COMMAND")
+        self.mav.mav.command_long_send(
+            self.mav.target_system, self.mav.target_component,
+            self.mavutil.mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH,
+            0, 0, 0, 0, 0, 0, 0, 0)
+
+    def execute_primitive(self, primitive: Dict):
+        """
+        Execute a raw primitive (Takeoff, Land, etc)
+        """
+        action = primitive.get("action", "").upper()
+        if action == "TAKEOFF": self.takeoff()
+        elif action == "LAND": self.land()
+        elif action == "RTH": self.rth()
+        
+    def fly_to_coords(self, lat, lon):
+        if not self.connected: return
+        print(f"📍 FLYING TO: {lat}, {lon}")
+        # MAV_CMD_NAV_WAYPOINT etc
+        # Simplified implementation
+        pass
+
+    def get_position(self):
+        """Return [lat, lon, alt]"""
+        return [0, 0, 0] # Stub for now
+
+    def _set_mode(self, mode):
+        if not self.connected: return
+        # Get mode ID
+        mode_id = self.mav.mode_mapping().get(mode)
+        if mode_id and mode_id is not None:
+            self.mav.mav.set_mode_send(
+                self.mav.target_system,
+                self.mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+                mode_id)
+
+

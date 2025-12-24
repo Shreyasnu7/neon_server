@@ -1,4 +1,9 @@
 
+import cv2
+import numpy as np
+import math
+import time
+
 # =====================================================================
 # CLASS 14 — DEBUG VISUALIZER (Zebra, Over/Under Heatmaps, Focus Peaking)
 # =====================================================================

@@ -57,7 +57,7 @@ class CloudOrchestrator:
         if "brain_context" in telemetry:
              self.state.metadata["last_brain_context"] = json.dumps(telemetry["brain_context"])
 
-    async def process_multimodal_request(self, text, user_id, drone_id, images=None, video=None, brain_context=None, api_key=None):
+    async def process_multimodal_request(self, text, user_id, drone_id, images=None, video=None, brain_context=None, api_keys=None):
         """
         Full Pipeline: User -> LLM -> Validation -> Plan -> Dispatch.
         """
@@ -73,7 +73,7 @@ class CloudOrchestrator:
             user_text=text,
             image_refs=vision_refs,
             memory_context={"laptop_brain": brain_context or {}}, # Deep wiring
-            api_keys={"gemini": api_key} if api_key else {}
+            api_keys=api_keys or {} # Pass the dict directly
         )
 
         # 3. Strict Validation (IntentBuilder)

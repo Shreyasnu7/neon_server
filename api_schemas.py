@@ -50,6 +50,7 @@ class MultimodalRequest(BaseModel):
     include_vision: bool = False
     images: Optional[list[str]] = [] # Base64 or URLs
     video: Optional[str] = None      # URL or path
+    api_keys: Optional[Dict[str, str]] = {} # User provided keys (BYOK)
 
 # Backward compatibility alias
 TextRequest = MultimodalRequest

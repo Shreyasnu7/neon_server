@@ -24,7 +24,8 @@ async def ai_text(req: MultimodalRequest):
         user_id=req.user_id,
         drone_id=req.drone_id,
         images=req.images,
-        video=req.video
+        video=req.video,
+        api_keys=req.api_keys # Pass user provided keys
     )
     return result
     return result

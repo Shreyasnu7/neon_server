@@ -1,7 +1,9 @@
 # ws_router.py
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
+import os
 from typing import Dict, List
+from cloud_ai.dependencies import get_orchestrator
 
 ws_router = APIRouter()
 
@@ -48,9 +50,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-from cloud_ai.dependencies import get_orchestrator
-
-@ws_router.websocket("/connect/{client_id}")
+@ws_router.websocket("/ws/connect/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     print(f"🔌 INCOMING WS CONNECTION: {client_id}")
     """
@@ -61,14 +61,40 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     is_drone = (client_id == "laptop_vision")
     orchestrator = get_orchestrator()
     
+    # 1. AUTH CHECK / CONNECTION SETUP
     if is_drone:
         await manager.connect_drone(websocket)
-        # REGISTER DRONE WITH BRAIN (Sync call)
-        orchestrator.dispatcher.register_drone_connection(websocket)
-        print("✅ Drone registered with Enterprise Brain")
+        try:
+             # Wait for Handshake (Drone sends {"token": ...})
+             # or we implement a timeout here in real prod
+             # For simplicity, we assume the first message is the handshake
+             # IF the client logic sends it immediately.
+             # Note: Laptop client does send it immediately.
+             
+             raw = await websocket.receive_text()
+             handshake = json.loads(raw)
+             server_token = os.getenv("AUTH_TOKEN", "SUPER_SECRET_DRONE_KEY_123")
+             
+             if handshake.get("token") != server_token:
+                 print(f"🚨 AUTH FAILURE: {client_id} (Token Mismatch)")
+                 await websocket.close(code=4003)
+                 manager.disconnect_drone()
+                 return
+
+             print("✅ DRONE AUTHENTICATED")
+             
+             # REGISTER WITH BRAIN
+             orchestrator.dispatcher.register_drone_connection(websocket)
+
+        except Exception as e:
+             print(f"Auth Error: {e}")
+             await websocket.close()
+             return
     else:
+        # App Client
         await manager.connect_mobile(websocket)
 
+    # 2. MAIN LOOP
     try:
         while True:
             data = await websocket.receive_text()
@@ -76,13 +102,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             # ROUTING LOGIC
             if is_drone:
                 # 1. Drone -> Brain (Telemetry/Video)
-                # Parse packet
                 try:
                     packet = json.loads(data)
                     # Feed brain context if present
                     if "brain_context" in packet or "telemetry" in packet:
-                        # 1a. FEED THE BRAIN
-                        # This allows the Orchestrator to update SessionState (position, battery, status)
                         orchestrator.monitor_telemetry(packet)
                 except: pass
 
@@ -96,7 +119,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     except WebSocketDisconnect:
         if is_drone:
             manager.disconnect_drone()
-            orchestrator.dispatcher.remove_drone_connection()
+            # orchestrator.dispatcher.remove_drone_connection() # Optional depending on orch implementation
         else:
             manager.disconnect_mobile(websocket)
     except Exception as e:

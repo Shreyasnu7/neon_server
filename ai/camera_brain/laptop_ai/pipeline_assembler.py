@@ -1,4 +1,18 @@
 
+import cv2
+import numpy as np
+import math
+from laptop_ai.color_components import (
+    LOGGammaGenerator, HighlightRecovery, ShadowLiftEngine, 
+    LocalColorOptimizer, SaturationEngine, ColorTemperatureEstimator, 
+    AdaptiveWhiteBalanceEngine, FilmGrainSimulator, ShotMoodController
+)
+# Compatibility alias if needed
+try:
+    from laptop_ai.ai_exposure_engine import ExposureEnginePro
+except ImportError:
+    ExposureEnginePro = None
+
 # ================================================================
 # 3497. Vignette Engine – lens-character artistic shading
 # ================================================================
