@@ -1,7 +1,7 @@
 # utils.py
 import json, os
 
-JOBS_DIR = "/mnt/data/jobs"
+JOBS_DIR = "/tmp/jobs"
 os.makedirs(JOBS_DIR, exist_ok=True)
 
 def save_json(path, data):
