@@ -3,7 +3,7 @@ import os, json
 from fastapi import APIRouter
 from api_schemas import MemoryWrite, MemoryRead
 
-MEMORY_DIR = "/mnt/data/memory"
+MEMORY_DIR = "/tmp/memory"
 os.makedirs(MEMORY_DIR, exist_ok=True)
 
 memory_router = APIRouter(tags=["Memory"])

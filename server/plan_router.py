@@ -22,7 +22,7 @@ async def get_next_plan():
         return {"plan": None}
     return {"plan": _PLAN_QUEUE.pop(0).dict()}
 
-PLAN_DIR = "/mnt/data/jobs"
+PLAN_DIR = "/tmp/jobs"
 os.makedirs(PLAN_DIR, exist_ok=True)
 
 plan_router = APIRouter(tags=["Plans"])
