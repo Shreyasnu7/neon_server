@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from cloud_ai.orchestrator import CloudOrchestrator
-from plan_router import submit_plan
+from plan_router import save_plan_to_disk
 from api_schemas import DronePlan
 # Mock LLM Client for now or import real one
 class MockLLM:
@@ -32,7 +32,7 @@ async def ai_command(payload: dict):
         plan = plan_result
 
     # 3. Push to Execution Queue
-    await submit_plan(plan)
+    save_plan_to_disk(plan.dict())
 
     return {
         "status": "queued",
