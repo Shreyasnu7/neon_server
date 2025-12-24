@@ -43,6 +43,7 @@ from laptop_ai.multimodal_prompter import ask_gpt
 from laptop_ai.cinematic_planner import to_safe_primitive
 from laptop_ai.ultra_director import UltraDirector
 from laptop_ai.memory_client import read_memory, write_memory
+from laptop_ai.esp32_driver import ESP32Driver
 from laptop_ai.config import RTSP_URL, TEMPORAL_SMOOTHING, FRAME_SKIP, TEMP_ARTIFACT_DIR
 
 FRAME_SKIP = 2
@@ -59,22 +60,6 @@ os.makedirs(TEMP_ARTIFACT_DIR, exist_ok=True)
 class ThreadedYOLO:
     """
     Runs YOLO inference in a separate thread to avoid blocking the render loop.
-    """
-    def __init__(self, model_name="yolov8n.pt"):
-        print(f"🚀 Initializing Threaded YOLO ({model_name})...")
-        self.model = YOLO(model_name)
-        self.model.to('cuda' if os.environ.get('CUDA_VISIBLE_DEVICES') != '-1' else 'cpu')
-        print(f"🚀 YOLO Device: {self.model.device}")
-        
-        self.frame = None
-        self.lock = threading.Lock()
-        self.running = True
-        self.latest_detections = []
-        self.thread = threading.Thread(target=self._worker, daemon=True)
-        self.names = self.model.names
-
-    def start(self):
-        self.thread.start()
 
     def stop(self):
         self.running = False
@@ -128,26 +113,14 @@ class ThreadedYOLO:
                 with self.lock:
                     self.latest_detections = new_dets
                     
-            except Exception as e:
-                print(f"YOLO Thread Error: {e}")
-                time.sleep(0.01)
-
-
-class Director:
-    def __init__(self, client_id="laptop", simulate: bool = False):
-        self.ws = MessagingClient(client_id=client_id)
-        self.tracker = VisionTracker()
-        self.ultra = UltraDirector()
-        self.fusion = CameraFusion()
-        self.gopro = GoProDriver()
-        self.ai_cam = AICameraBrain()
-        self.simulate = simulate
-        self.processing = False
         self.last_job_time = 0
         self.frame_skip = FRAME_SKIP
         
         self.threaded_yolo = None
         self.gpu_tone_engine = None
+        self.last_app_heartbeat = time.time() # Initialize active
+        self.conn_failsafe_triggered = False
+        self.last_known_user_loc = None # [lat, lon]
 
     async def start(self):
         await self.ws.connect()
@@ -155,6 +128,7 @@ class Director:
         # Start the continuous vision/streaming loop
         asyncio.create_task(self._vision_streaming_loop())
         print("Director: connected to messaging service and vision loop started.")
+        self.autopilot.connect()
 
     async def _vision_streaming_loop(self):
         """
@@ -259,11 +233,73 @@ class Director:
             fps = 1.0 / (curr_time - last_loop_time + 1e-9)
             last_loop_time = curr_time
             
+            # Read ESP32 Sensors
+            telem = self.esp32.get_telemetry()
+            if telem:
+                tofs = telem.get("tof", [])
+                gyro = telem.get("gyro", [0, 0, 0])
+                
+                # Recv UDP Commands
+                # --- SAFETY 1: TUMBLE DETECTION (CRASH) ---
+                gyro_mag = abs(gyro[0]) + abs(gyro[1]) + abs(gyro[2])
+                if gyro_mag > 10.0:
+                    cv2.putText(display_frame, "TUMBLE DETECTED - DISARM", (100, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
+                    print("⚠️ CRITICAL: TUMBLE DETECTED! DISARMING!")
+                    if self.autopilot.connected:
+                        self.autopilot.disarm()
+                
+                # --- SAFETY 2: OBSTACLE AVOIDANCE INJECTION ---
+                # Forward processed distances to FC for Native ArduPilot Avoidance (OA_TYPE=1 or 2)
+                # Mapping: TOF1(FL)->7, TOF2(RL)->5, TOF3(FR)->1, TOF4(RR)->3
+                if len(tofs) >= 4 and self.autopilot.connected:
+                     # Filter noise - only send valid ranges < 200cm
+                     if tofs[0] < 2000: self.autopilot.send_distance_sensor(int(tofs[0]/10), 7) # FL
+                     if tofs[1] < 2000: self.autopilot.send_distance_sensor(int(tofs[1]/10), 5) # RL
+                     if tofs[2] < 2000: self.autopilot.send_distance_sensor(int(tofs[2]/10), 1) # FR
+                     if tofs[3] < 2000: self.autopilot.send_distance_sensor(int(tofs[3]/10), 3) # RR
+
+                cv2.putText(display_frame, f"ToF: {tofs} Gyro: {gyro_mag:.1f}", (10, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 100, 100), 1)
+                
+                # Active Collision Warning (Visual)
+                risk = False
+                if any(t < 500 for t in tofs): # Less than 50cm
+                     cv2.putText(display_frame, "COLLISION WARNING", (300, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
+                     self.esp32.set_led("RED")
+                     risk = True
+                     # Double Safety: Force Stop if really close (Backup to FC avoidance)
+                     if self.autopilot.connected and min(tofs) < 300:
+                        self.autopilot.send_velocity(0, 0, 0)
+                else:
+                     if gyro_mag < 0.5: self.esp32.set_led("GREEN") 
+                     else: self.esp32.set_led("BLUE")
+            
+            # --- 7. CONNECTION WATCHDOG (Use MPU/ToF valid time if simulated) ---
+            # Ideally we get heartbeats from app. For now assume any packet resets it.
+            # RTH if silence > 5s
+            if time.time() - self.last_app_heartbeat > 5.0:
+                if not self.conn_failsafe_triggered:
+                    print("⚠️ ALERT: CONNECTION LOST! INITIATING RTH!")
+                    cv2.putText(display_frame, "CONNECTION LOST - RTH", (200, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
+                    self.conn_failsafe_triggered = True
+            if self.autopilot.connected:
+                        if self.last_known_user_loc:
+                            print(f"⚠️ RTH TARGET: USER LOC {self.last_known_user_loc}")
+                            self.autopilot.fly_to_coords(self.last_known_user_loc[0], self.last_known_user_loc[1])
+                        else:
+                            print("⚠️ RTH TARGET: HOME (No User Loc)")
+                            self.autopilot.return_to_launch()
+                # Blink Red/Blue
+                if int(curr_time * 5) % 2 == 0: self.esp32.set_led("RED")
+                else: self.esp32.set_led("BLUE")
+            else:
+                self.conn_failsafe_triggered = False
+
             cv2.putText(display_frame, f"FPS: {fps:.1f}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
             
             cv2.imshow("Director View - Laptop AI", display_frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 self.threaded_yolo.stop()
+                self.esp32.close()
                 break
             
             # Yield for network IO
@@ -274,9 +310,53 @@ class Director:
         Messaging client will call this when any new packet arrives.
         """
         try:
+            self.last_app_heartbeat = time.time() # Any packet is a heartbeat
+            
+            # Extract User GPS from any packet if present
+            if "user_gps" in packet:
+                self.last_known_user_loc = packet["user_gps"] # [lat, lon]
+                
             t = packet.get("type")
             if t == "ai_job":
                 asyncio.create_task(self.process_job(packet))
+            if t == "ai_job":
+                asyncio.create_task(self.process_job(packet))
+            elif t == "command":
+                cmd = packet.get("action", "").upper()
+                if cmd == "RTH":
+                     print("🏠 MANUAL RTH TRIGGERED via APP")
+                     # Reuse Failsafe Logic
+                     if self.autopilot.connected:
+                        if self.last_known_user_loc:
+                            print(f"📍 RTH TARGET: USER LOC {self.last_known_user_loc}")
+                            self.autopilot.fly_to_coords(self.last_known_user_loc[0], self.last_known_user_loc[1])
+                        else:
+                            print("⚠️ RTH TARGET: HOME (No User Loc)")
+                            self.autopilot.return_to_launch()
+                elif cmd == "LAND":
+                     if self.autopilot.connected: self.autopilot.execute_primitive({"action": "LAND"})
+                elif cmd == "TAKEOFF":
+                     if self.autopilot.connected: self.autopilot.execute_primitive({"action": "TAKEOFF"})
+                elif cmd.startswith("SET_CONFIG"):
+                     # Format: SET_CONFIG: key=value
+                     try:
+                         _, kv = cmd.split(":", 1)
+                         key, val = kv.split("=", 1)
+                         key = key.strip()
+                         val = val.strip()
+                         print(f"⚙️ EXECUTING CONFIG CHANGE: {key} -> {val}")
+                         
+                         if key == "avoidance":
+                             self.avoidance_enabled = (val.lower() == "true")
+                             print(f"🛡️ AVOIDANCE SYSTEM: {'ENABLED' if self.avoidance_enabled else 'DISABLED'}")
+                         elif key == "vision":
+                             print(f"👁️ VISION POSITIONING: {val}")
+                             # Enable/Disable Optical Flow logic if implemented
+                         elif key == "res":
+                             print(f"📷 CAMERA RESOLUTION SET: {val}")
+                             # If using GoPro/RPi, re-init stream here
+                     except Exception as e:
+                         print(f"⚠️ CONFIG ERROR: {e}")
             else:
                 pass 
         except Exception:
@@ -344,9 +424,28 @@ class Director:
                 elif mode == "unsafe_hover":
                     primitive = {"action": "HOVER"}
             
-            # 7. Final Send
+            # 6b. Gimbal Control (from AI meta/reasoning)
+            # If AI suggests an angle, move gimbal
+            cam_angle = raw.get("camera_angle", "eye_level")
+            pitch = 0
+            if cam_angle == "high_angle": pitch = -30
+            elif cam_angle == "low_angle": pitch = 20
+            # TODO: Add dynamic look_at based on YOLO center
+            
+            if self.esp32:
+                self.esp32.set_gimbal(pitch, 0)
+                if primitive.get("action") == "ORBIT":
+                     self.esp32.set_led("BLUE") # Recording Color
+                else:
+                     self.esp32.set_led("GREEN")
+            
+            # 7. Final Send (Server)
             primitive = to_safe_primitive(primitive)
             await self._send_plan(job_id, user_id, drone_id, primitive, reason="ok")
+            
+            # 8. Local Execution (Fast)
+            if self.autopilot.connected:
+                self.autopilot.execute_primitive(primitive)
             
         except Exception as e:
             print(f"Job Error: {e}")

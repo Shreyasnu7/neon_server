@@ -31,6 +31,27 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+@ws_router.websocket("/telemetry")
+async def ws_telemetry(websocket: WebSocket):
+    # App connects here. Assign a random ID or wait for auth packet.
+    client_id = f"app_{id(websocket)}"
+    await manager.connect(websocket, client_id)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Handle App Auth/Handshake
+            try:
+                msg = json.loads(data)
+                if msg.get("type") == "auth":
+                     print(f"App Authenticated: {client_id}")
+                     continue
+            except: pass
+            
+            # Broadcast commands to Drone
+            await manager.broadcast(data, sender_id=client_id)
+    except WebSocketDisconnect:
+        manager.disconnect(client_id)
+
 @ws_router.websocket("/connect/{client_id}")
 async def connect_client(websocket: WebSocket, client_id: str):
     await manager.connect(websocket, client_id)

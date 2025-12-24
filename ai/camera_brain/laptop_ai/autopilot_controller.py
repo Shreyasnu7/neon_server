@@ -8,10 +8,25 @@ class AutopilotController:
     Connects to the Flight Controller (FC) via MAVLink.
     Executed by DirectorCore to move the physical drone.
     
-    Port: /dev/ttyACM0 (Radxa -> FC) or udpin:localhost:14550 (SITL)
+    Port: /dev/ttyS0 (Radxa UART) or /dev/ttyACM0 (USB)
     """
-    def __init__(self, connection_string="/dev/ttyACM0", baud=57600):
-        self.conn_str = connection_string
+    def __init__(self, connection_string=None, baud=57600):
+        # Auto-detect or use provided
+        if connection_string:
+            self.conn_str = connection_string
+        else:
+            # Try default UART for Radxa Zero 3W (Pins 8/10 usually ttyS0 or ttyAML0)
+            # Fallback to USB if available
+            import os
+            if os.path.exists("/dev/ttyACM0"):
+                self.conn_str = "/dev/ttyACM0"
+            elif os.path.exists("/dev/ttyS0"):
+                self.conn_str = "/dev/ttyS0" # UART
+            else:
+                self.conn_str = "/dev/ttyACM0" # Fallback
+                
+        self.baud = baud
+        self.master = None
         self.baud = baud
         self.master = None
         self.connected = False
@@ -25,7 +40,31 @@ class AutopilotController:
             print("✅ Flight Controller CONNECTED via MAVLink!")
         except Exception as e:
             print(f"⚠️ MAVLink Connection Failed: {e}")
-            self.connected = False
+    def set_mode(self, mode):
+        if not self.master: return
+        mode_id = self.master.mode_mapping().get(mode)
+        if mode_id is None:
+            print(f"Unknown mode: {mode}")
+            return
+        
+        self.master.mav.set_mode_send(
+            self.master.target_system,
+            mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+            mode_id
+        )
+        print(f"Requested Mode: {mode}")
+
+    def arm(self):
+        if not self.master: return
+        self.master.arducopter_arm()
+        self.master.motors_armed_wait()
+        print("✅ Drone ARMED")
+
+    def disarm(self):
+        if not self.master: return
+        self.master.arducopter_disarm()
+        self.master.motors_disarmed_wait()
+        print("⚠️ Drone DISARMED")
 
     def send_velocity(self, vx, vy, vz, yaw_rate=0):
         """
@@ -52,13 +91,98 @@ class AutopilotController:
             yaw_rate # yaw_rate
         )
 
+    def return_to_launch(self):
+        if not self.master: return
+        print("🏠 Returning to Launch (RTL)...")
+        # Ensure mode is GUIDED or RTL
+        self.set_mode("RTL") 
+        # Alternatively use Command
+        self.master.mav.command_long_send(
+            self.master.target_system,
+            self.master.target_component,
+            mavutil.mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH,
+            0, 0, 0, 0, 0, 0, 0, 0
+        )
+
+    def takeoff(self, altitude=2.0):
+        if not self.master: return
+        print(f"🛫 Taking off to {altitude}m...")
+        self.master.mav.command_long_send(
+            self.master.target_system,
+            self.master.target_component,
+            mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
+            0, 0, 0, 0, 0, 0, 0, altitude
+        )
+
+    def fly_to_coords(self, lat, lon, alt=5.0):
+        """
+        Fly to specific Global Coordinates (Guided Mode).
+        lat/lon in degrees (float). alt in meters (relative to home).
+        """
+        if not self.master: return
+        print(f"📍 Flying to {lat}, {lon} at {alt}m")
+        self.set_mode("GUIDED")
+        
+        # MAVLink requires integers for lat/lon (deg * 1e7)
+        lat_int = int(lat * 1e7)
+        lon_int = int(lon * 1e7)
+        
+        type_mask = 0b0000111111111000 # Ignore velocity/accel/yaw, only use Position
+        
+        self.master.mav.set_position_target_global_int_send(
+            0, # boot_ms
+            self.master.target_system,
+            self.master.target_component,
+            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
+            type_mask,
+            lat_int, lon_int, alt,
+            0, 0, 0, # vel
+            0, 0, 0, # accel
+            0, 0 # yaw
+        )
+
+    def execute_primitive(self, primitive):
+        """
+        Executes a high-level primitive locally.
+        """
+        if not self.connected: return
+        
+        action = primitive.get("action", "HOVER").upper()
+        params = primitive.get("params", {})
+        
+        print(f"✈️ Autopilot Executing: {action}")
+        
+        if action == "TAKEOFF":
+            self.set_mode("GUIDED")
+            self.arm()
+            time.sleep(1)
+            self.takeoff(3.0) # Default altitude
+
+        elif action == "HOVER":
+            self.send_velocity(0, 0, 0)
+            
+        elif action == "FOLLOW":
+            # Simple Forward velocity (0.5 m/s) with Yaw tracking (Not implemented here, needs Vision Loop)
+            # This is a 'Kickstart' command. The vision loop should perform the actual tracking.
+            self.send_velocity(0.5, 0, 0)
+            
+        elif action == "ORBIT":
+            # Constant Yaw Rate, minor sideways velocity
+            self.send_velocity(0, 0.5, 0, yaw_rate=0.2)
+            
+        elif action == "LAND":
+            # MAVLink Land
+            if self.master:
+                self.master.mav.command_long_send(
+                    self.master.target_system,
+                    self.master.target_component,
+                    mavutil.mavlink.MAV_CMD_NAV_LAND,
+                    0, 0, 0, 0, 0, 0, 0, 0
+                )
+
     def execute_plan_point(self, position, yaw):
         """
         Executes a 3D point from the UltraDirector curve.
         """
         # For simplicity in this v1, we map position changes to velocity
-        # Or if position control is desired:
-        if not self.connected: return
-        
-        # Implementation of position setpoint...
         pass

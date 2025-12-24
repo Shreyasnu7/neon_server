@@ -12,54 +12,61 @@ class ExecutionPlanner:
         shot_intent: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Output is descriptive, not prescriptive.
+        Input: "Director's" Intent (shot_type, motion_energy, target_subject)
+        Output: "Pilot's" Flight Plan (DronePlan compliant)
         """
+        maneuver = self._derive_maneuver(shot_intent)
 
         return {
             "plan_id": str(uuid.uuid4()),
             "intent_signature": shot_intent,
-            # DEEP LOGIC: We translate "Orbit" and "Follow" into actual metadata
-            "maneuver": self._derive_maneuver(shot_intent),
-            "action": self._derive_maneuver(shot_intent)["type"], # HOISTING FOR SCHEMA COMPLIANCE
-            "reasoning": shot_intent.get("reasoning", "Autonomous Action"), # PASS EXPLANATION
-            "stages": [
-                {
-                    "stage": "approach",
-                    "constraints": {
-                        "motion_energy": shot_intent.get("motion_energy", 0.5),
-                        "risk_tolerance": shot_intent.get("risk_tolerance", 0.1),
-                    },
-                },
-                {
-                    "stage": "primary_capture",
-                    "constraints": {
-                        "camera_presence": shot_intent.get("camera_presence", 0.5),
-                        "imperfection_tolerance": shot_intent.get("imperfection_tolerance", 0.2),
-                    },
-                }
-            ],
+            "maneuver": maneuver,
+            
+            # SCHEMA COMPLIANCE (api_schemas.DronePlan)
+            "action": maneuver["type"], 
+            "target": shot_intent.get("target_subject"), # "red car"
+            "reasoning": shot_intent.get("reasoning", "Executing autonomous maneuver."),
+            "style": shot_intent.get("camera_movement", "Standard"),
+            
+            "constraints": {
+                 "speed_limit": self._energy_to_speed(shot_intent.get("motion_energy", 0.5)),
+                 "framing": shot_intent.get("framing", "MEDIUM"),
+                 "risk_tolerance": shot_intent.get("motion_energy", 0.5) # UNCONSTRAINED: 1.0 Energy = 1.0 Risk
+            }
         }
 
-    def _derive_maneuver(self, intent):
+    def _derive_maneuver(self, intent: Dict[str, Any]) -> Dict[str, Any]:
         """
         Translates Abstract Intent -> Concrete Maneuver Primitive
         """
-        stype = intent.get("shot_type", "static")
+        # AI Output: shot_type (ORBIT, FOLLOW, DOLLY, HOVER)
+        stype = intent.get("shot_type", "HOVER").upper()
+        energy = intent.get("motion_energy", 0.5)
         
-        if "orbit" in stype:
+        if stype == "ORBIT":
             return {
                 "type": "ORBIT",
-                "radius": intent.get("zoom", 1.0) * 5.0, # zoom correlates to distance
-                "speed": intent.get("motion_energy", 0.5) * 2.0
+                "radius": 2.0 if intent.get("framing") == "TIGHT" else 8.0, # UNLOCKED: 2m is very close
+                "speed": energy * 10.0 # UNLOCKED: Up to 10m/s orbit speed
             }
-        elif "follow" in stype or "track" in stype:
+        elif stype == "FOLLOW" or stype == "TRACK":
             return {
                 "type": "FOLLOW",
-                "offset": {"x": -2.0, "y": 0, "z": 1.5}, # Standard framing
-                "aggressiveness": intent.get("forward_motion", 0.5)
+                "offset": {"x": -2.0, "y": 0, "z": 1.0}, # UNLOCKED: Lower/Closer default
+                "aggressiveness": energy * 1.5 # UNLOCKED: Overclock PIDs if needed (>1.0)
             }
+        elif stype == "DOLLY" or stype == "REVEAL":
+             return {
+                 "type": "DOLLY",
+                 "vector": {"x": 1.0, "y": 0.0, "z": 0.2}, 
+                 "duration": 10.0
+             }
         else:
              return {
                 "type": "HOVER",
                 "look_at_subject": True
              }
+             
+    def _energy_to_speed(self, energy: float) -> float:
+        # Map 0.0-1.0 to 0.5m/s - 20.0m/s (UNCONSTRAINED)
+        return 0.5 + (energy * 19.5)
