@@ -7,6 +7,7 @@ from ai_router import ai_router
 from memory_router import memory_router
 from plan_router import plan_router
 from ws_router import ws_router
+from auth_router import auth_router
 
 
 from ai_command_router import router as ai_command_router
@@ -32,6 +33,7 @@ app.include_router(memory_router, prefix="/memory")
 app.include_router(plan_router, prefix="/plan")
 app.include_router(ws_router, prefix="/ws")
 app.include_router(ai_command_router)
+app.include_router(auth_router, prefix="/session")
 
 # Health check
 @app.get("/")
