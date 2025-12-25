@@ -38,40 +38,36 @@ async def ai_command(payload: dict):
     # Extract text from payload or default
     text_prompt = payload.get("text", "Execute autonomous behavior")
     
-    # Extract api_key if provided (Robust Check)
-    # App might send: api_key, apiKey, key, gemini_api_key, api_keys={"gemini": ...}
+    # 1. Extract Keys (BYOK Support)
+    # The app sends "api_keys": {"gemini": "...", "openai": "..."}
+    client_keys = payload.get("api_keys", {})
     
-    # 1. Direct Keys
-    direct_key = (
-        payload.get("api_key") or 
-        payload.get("apiKey") or 
-        payload.get("key") or 
-        payload.get("gemini_api_key")
-    )
+    # Fallback for legacy calls (singular key)
+    if not client_keys:
+        direct_key = (
+            payload.get("api_key") or 
+            payload.get("apiKey") or 
+            payload.get("key") or 
+            payload.get("gemini_api_key")
+        )
+        if direct_key:
+            client_keys = {"gemini": direct_key}
 
-    # 2. Nested Keys (api_keys)
-    nested_keys = payload.get("api_keys", {})
-    nested_key = None
-    if isinstance(nested_keys, dict):
-        nested_key = nested_keys.get("gemini") or nested_keys.get("google")
-
-    api_key = direct_key or nested_key
-    
     # DEBUG PAYLOAD KEYS (Security: Don't print values)
     print(f"DEBUG: /director/ai/command Payload Keys: {list(payload.keys())}")
-    if api_key:
-        print(f"DEBUG: Found API Key (Length: {len(api_key)})")
+    if client_keys:
+        print(f"DEBUG: Found API Keys for: {list(client_keys.keys())}")
     else:
         print("DEBUG: NO API KEY FOUND IN PAYLOAD")
 
-    # Pass api_key to orchestrator
+    # Pass api_keys dict to orchestrator
     plan_result = await orchestrator.process_multimodal_request(
         text=text_prompt,
         user_id="default_user", 
         drone_id="default_drone",
         images=payload.get("media"), 
         brain_context=config,
-        api_key=api_key
+        api_keys=client_keys # <--- Correct Argument
     )
     
     # 3. Ensure it matches DronePlan schema
