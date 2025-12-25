@@ -19,19 +19,6 @@ class ExecutionPlanner:
 
         return {
             "plan_id": str(uuid.uuid4()),
-            "intent_signature": shot_intent,
-            "maneuver": maneuver,
-            
-            # SCHEMA COMPLIANCE (api_schemas.DronePlan)
-            "action": maneuver["type"], 
-            "target": shot_intent.get("target_subject"), # "red car"
-            "reasoning": f"IN[{shot_intent.get('debug_input_text', '?')}]: {str(shot_intent.get('reasoning') or 'EXECUTING AUTONOMOUS MANEUVER').upper()}",
-            "style": shot_intent.get("camera_movement", "Standard"),
-            
-            "constraints": {
-                 "speed_limit": self._energy_to_speed(shot_intent.get("motion_energy", 0.5)),
-                 "framing": shot_intent.get("framing", "MEDIUM"),
-                 "risk_tolerance": shot_intent.get("motion_energy", 0.5) # UNCONSTRAINED: 1.0 Energy = 1.0 Risk
             }
         }
 
