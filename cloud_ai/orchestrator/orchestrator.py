@@ -83,6 +83,11 @@ class CloudOrchestrator:
             api_keys=api_keys or {} # Pass the dict directly
         )
 
+        # DEBUG: FORCE REASONING VISIBILITY
+        if raw_intent and "reasoning" not in raw_intent:
+            raw_intent["reasoning"] = f"Raw LLM Output (No Reason Provide): {str(raw_intent)}"
+        print(f"DEBUG ORCHESTRATOR RAW: {raw_intent}")
+
         # 3. Strict Validation (IntentBuilder)
         try:
             validated_intent = self.validator.build_base_intent(raw_intent)
@@ -108,6 +113,10 @@ class CloudOrchestrator:
 
         if owner != "ai":
             return {"status": "blocked_by_human"}
+
+        if "reasoning" not in shot_intent or not shot_intent["reasoning"]:
+             shot_intent["shot_type"] = "ORBIT"
+             shot_intent["reasoning"] = "DEBUG: FORCED ORBIT (MISSING REASONING)"
 
         plan = self.planner.create_plan(shot_intent)
 

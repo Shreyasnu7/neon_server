@@ -25,7 +25,7 @@ class ExecutionPlanner:
             # SCHEMA COMPLIANCE (api_schemas.DronePlan)
             "action": maneuver["type"], 
             "target": shot_intent.get("target_subject"), # "red car"
-            "reasoning": shot_intent.get("reasoning", "Executing autonomous maneuver."),
+            "reasoning": str(shot_intent.get("reasoning", "EXECUTING AUTONOMOUS MANEUVER")).upper(),
             "style": shot_intent.get("camera_movement", "Standard"),
             
             "constraints": {
