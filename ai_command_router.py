@@ -78,17 +78,24 @@ async def ai_command(payload: dict):
         # 3. Ensure it matches DronePlan schema
         if isinstance(plan_result, dict):
             plan = DronePlan(**plan_result)
+            # FORCE RECOVERY of reasoning if lost in Pydantic
+            if not plan.reasoning and "reasoning" in plan_result:
+                plan.reasoning = plan_result["reasoning"]
         else:
             plan = plan_result
 
         # 4. Push to Execution Queue
         submit_plan(plan)
+        
+        # DEBUG: Print what we are sending
+        final_msg = plan.reasoning or "Command queued."
+        print(f"DEBUG ROUTER: Sending Message -> '{final_msg}'", flush=True)
 
         return {
             "status": "queued",
             "plan": plan.dict(),
             "used_config": config,
-            "message": plan.reasoning or "Command queued." 
+            "message": final_msg
         }
     except Exception as e:
         import traceback
