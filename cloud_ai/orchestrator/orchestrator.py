@@ -66,8 +66,8 @@ class CloudOrchestrator:
             return {"status": "denied", "reason": "unauthorized"}
 
         # MAGIC COMMAND: TEST PIPELINE
-        if text.strip().lower() == "test orbit":
-            print("✨ MAGIC COMMAND: Triggering Forced Orbit")
+        if text.strip().lower() == "test orbit" or "test orbit" in text.lower():
+            print("✨ MAGIC COMMAND: Triggering Forced Orbit", flush=True)
             return self.handle_intent({
                 "shot_type": "ORBIT",
                 "reasoning": "Succcess! Pipeline is working. LLM is the issue.",

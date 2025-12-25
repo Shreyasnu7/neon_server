@@ -54,12 +54,13 @@ async def ai_command(payload: dict):
             client_keys = {"gemini": direct_key}
 
     # DEBUG PAYLOAD KEYS (Security: Don't print values)
-    print(f"DEBUG: /director/ai/command Payload Keys: {list(payload.keys())}")
+    import sys
+    print(f"DEBUG: /director/ai/command Payload Keys: {list(payload.keys())}", flush=True)
     if client_keys:
         safe_log = {k: f"{v[:8]}..." if v else "EMPTY" for k, v in client_keys.items()}
-        print(f"DEBUG: 🔑 KEYS RECEIVED: {safe_log}")
+        print(f"DEBUG: 🔑 KEYS RECEIVED: {safe_log}", flush=True)
     else:
-        print("DEBUG: ⚠️ NO API KEYS IN PAYLOAD")
+        print("DEBUG: ⚠️ NO API KEYS IN PAYLOAD", flush=True)
     else:
         print("DEBUG: NO API KEY FOUND IN PAYLOAD")
 
