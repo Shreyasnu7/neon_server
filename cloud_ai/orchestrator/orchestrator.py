@@ -65,6 +65,15 @@ class CloudOrchestrator:
         if not self.authority.can_command(user_id, drone_id):
             return {"status": "denied", "reason": "unauthorized"}
 
+        # MAGIC COMMAND: TEST PIPELINE
+        if text.strip().lower() == "test orbit":
+            print("✨ MAGIC COMMAND: Triggering Forced Orbit")
+            return self.handle_intent({
+                "shot_type": "ORBIT",
+                "reasoning": "Succcess! Pipeline is working. LLM is the issue.",
+                "motion_energy": 0.8
+            }, human_override=False)
+
         # 2. Shot Intent Reasoning (LLM)
         # We assume image URLs or base64 are passed in 'images'
         vision_refs = images if images else []
