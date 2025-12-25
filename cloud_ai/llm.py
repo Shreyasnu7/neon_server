@@ -98,25 +98,6 @@ class RealLLMClient:
                     else: last_error = f"OpenAI Key Error: {str(e)[:50]}..."
 
              if self.openai_client:
-                 return self._call_openai(system, user, client=self.openai_client)
-             
-             last_error = "OpenAI Client Misconfigured"
-
-        elif provider == "deepseek":
-             # DeepSeek Integration (OpenAI Compatible)
-             ds_key = api_keys.get("deepseek") or os.environ.get("DEEPSEEK_API_KEY")
-             ds_url = os.environ.get("DEEPSEEK_URL", "https://api.deepseek.com/v1")
-             
-             if ds_key and OpenAI:
-                 try:
-                     print(f"DEBUG: Calling DeepSeek at {ds_url}")
-                     ds_client = OpenAI(api_key=ds_key, base_url=ds_url)
-                     return self._call_openai(system, user, client=ds_client, model="deepseek-chat")
-                 except Exception as e:
-                     logger.error(f"DeepSeek Call Failed: {e}")
-                     last_error = f"DeepSeek Error: {e}"
-             else:
-                 last_error = "DeepSeek Key Missing or OpenAI Lib not installed"
                  try:
                      return self._call_openai(system, user)
                  except Exception as e:
