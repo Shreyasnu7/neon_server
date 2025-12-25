@@ -24,7 +24,7 @@ class OrchestrationDispatcher:
         Enforces LaptopContract.
         """
         if not self._drone_socket:
-            print("⚠️ DISPATCH FAIL: No Drone Connected")
+            print("DISPATCH FAIL: No Drone Connected")
             return
 
         # 1. Contract Check (Wiring Validation)
@@ -40,9 +40,9 @@ class OrchestrationDispatcher:
         
         try:
             await self._drone_socket.send_text(json.dumps(payload))
-            print(f"🚀 Plan Dispatched to Laptop: {plan.get('plan_id')}")
+            print(f"Plan Dispatched to Laptop: {plan.get('plan_id')}")
         except Exception as e:
-            print(f"❌ Dispatch Network Error: {e}")
+            print(f"Dispatch Network Error: {e}")
 
     async def dispatch_to_radxa(self, safety_constraints: Dict[str, Any]):
         """
@@ -69,6 +69,6 @@ class OrchestrationDispatcher:
         
         try:
             await self._drone_socket.send_text(json.dumps(payload))
-            print(f"🛡️ Safety Envelope Dispatched to Radxa")
+            print(f"Safety Envelope Dispatched to Radxa")
         except Exception as e:
-            print(f"❌ Radxa Dispatch Error: {e}")
+            print(f"Radxa Dispatch Error: {e}")
