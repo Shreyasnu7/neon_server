@@ -10,5 +10,4 @@ services:
     envVars:
       - key: PORT
         value: 10000
-    rootDir: server
     autoDeploy: true
