@@ -25,7 +25,9 @@ class ExecutionPlanner:
             # SCHEMA COMPLIANCE (api_schemas.DronePlan)
             "action": maneuver["type"], 
             "target": shot_intent.get("target_subject"), 
-            "reasoning": f"IN[{shot_intent.get('debug_input_text', '?')}]: {str(shot_intent.get('reasoning') or 'ERROR: REASONING MISSING').upper()}",
+            "target": shot_intent.get("target_subject"), 
+            "reasoning": shot_intent.get("reasoning", "Command Queued (No AI Reasoning provided)"),
+            "style": shot_intent.get("camera_movement", "Standard"),
             "style": shot_intent.get("camera_movement", "Standard"),
             
             "constraints": {
