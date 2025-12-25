@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter
 from api_schemas import DronePlan
 
-plan_router = APIRouter()
+plan_router = router = APIRouter()
 
 # Safe In-Memory Queue
 _PLAN_QUEUE = []
