@@ -88,7 +88,7 @@ async def ai_command(payload: dict):
         submit_plan(plan)
         
         # DEBUG: Print what we are sending
-        final_msg = plan.reasoning or "Command queued."
+        final_msg = plan.reasoning or "SERVER_LIVE_GOOGLE_V3: Reasoning Missing"
         print(f"DEBUG ROUTER: Sending Message -> '{final_msg}'", flush=True)
 
         return {
