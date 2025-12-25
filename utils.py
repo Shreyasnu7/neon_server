@@ -1,7 +1,8 @@
 # utils.py
 import json, os
 
-JOBS_DIR = "/mnt/data/jobs"
+import tempfile
+JOBS_DIR = os.path.join(tempfile.gettempdir(), "drone_jobs")
 os.makedirs(JOBS_DIR, exist_ok=True)
 
 def save_json(path, data):
