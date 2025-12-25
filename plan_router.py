@@ -3,18 +3,18 @@ import uuid
 from fastapi import APIRouter
 from api_schemas import DronePlan
 
-router = APIRouter()
+plan_router = APIRouter()
 
 # Safe In-Memory Queue
 _PLAN_QUEUE = []
 
-@router.post("/plan")
+@plan_router.post("/plan")
 async def submit_plan(plan: DronePlan):
     # Log logic here if needed
     _PLAN_QUEUE.append(plan)
     return {"status": "queued"}
 
-@router.get("/plan/next")
+@plan_router.get("/plan/next")
 async def get_next_plan():
     if not _PLAN_QUEUE:
         return {"plan": None}
