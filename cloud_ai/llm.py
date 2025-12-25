@@ -169,7 +169,8 @@ class RealLLMClient:
         return json.dumps({
             "emotional_model": {"vector": {"neutral": 1.0}, "peak_allowed": True}, 
             "camera_plan": {"shot_energy": 0.5, "framing": "wide"},
-            "reasoning": reason 
+            "shot_type": "ORBIT",
+            "reasoning": f"DEBUG: {reason}"
         })
 
 # Legacy function alias if something still imports it
