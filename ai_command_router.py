@@ -55,38 +55,47 @@ async def ai_command(payload: dict):
 
     # DEBUG PAYLOAD KEYS (Security: Don't print values)
     import sys
+    # DEBUG PAYLOAD KEYS (Security: Don't print values)
     print(f"DEBUG: /director/ai/command Payload Keys: {list(payload.keys())}", flush=True)
+    
     if client_keys:
         safe_log = {k: f"{v[:8]}..." if v else "EMPTY" for k, v in client_keys.items()}
         print(f"DEBUG: 🔑 KEYS RECEIVED: {safe_log}", flush=True)
     else:
         print("DEBUG: ⚠️ NO API KEYS IN PAYLOAD", flush=True)
-    else:
-        print("DEBUG: NO API KEY FOUND IN PAYLOAD")
 
-    # Pass api_keys dict to orchestrator
-    plan_result = await orchestrator.process_multimodal_request(
-        text=text_prompt,
-        user_id="default_user", 
-        drone_id="default_drone",
-        images=payload.get("media"), 
-        brain_context=config,
-        api_keys=client_keys # <--- Correct Argument
-    )
-    
-    # 3. Ensure it matches DronePlan schema
-    if isinstance(plan_result, dict):
-        plan = DronePlan(**plan_result)
-    else:
-        plan = plan_result
+    try:
+        # Pass api_keys dict to orchestrator
+        plan_result = await orchestrator.process_multimodal_request(
+            text=text_prompt,
+            user_id="default_user", 
+            drone_id="default_drone",
+            images=payload.get("media"), 
+            brain_context=config,
+            api_keys=client_keys 
+        )
+        
+        # 3. Ensure it matches DronePlan schema
+        if isinstance(plan_result, dict):
+            plan = DronePlan(**plan_result)
+        else:
+            plan = plan_result
 
-    # 4. Push to Execution Queue & Broadcast to Laptop (via websocket usually, or laptop polls this)
-    # Ideally, Laptop AI listens to 'plans'.
-    submit_plan(plan)
+        # 4. Push to Execution Queue
+        submit_plan(plan)
 
-    return {
-        "status": "queued",
-        "plan": plan.dict(),
-        "used_config": config,
-        "message": plan.reasoning or "Command queued." # Frontend will display this
-    }
+        return {
+            "status": "queued",
+            "plan": plan.dict(),
+            "used_config": config,
+            "message": plan.reasoning or "Command queued." 
+        }
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"CRITICAL ROUTER ERROR: {error_trace}", flush=True)
+        return {
+            "status": "error",
+            "plan": {"action": "ERROR", "reasoning": f"INTERNAL SERVER ERROR: {str(e)}"},
+            "message": f"Server Crash: {str(e)}"
+        }
