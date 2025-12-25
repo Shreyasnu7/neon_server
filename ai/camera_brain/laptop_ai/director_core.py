@@ -415,7 +415,9 @@ class Director:
             
             # 4. Cloud Prompt (DeepSeek/GPT)
             print("Director: calling multimodal prompter...")
-            raw = await asyncio.to_thread(ask_gpt, user_text, vision_context, images, video_link, memory)
+            # Extract Keys from Job if present (BYOK Support for Laptop)
+            job_keys = job.get("api_keys", {}) 
+            raw = await asyncio.to_thread(ask_gpt, user_text, vision_context, images, video_link, memory, api_keys=job_keys)
             
             # 5. Planning
             primitive = to_safe_primitive(raw or {"action": "HOVER"})

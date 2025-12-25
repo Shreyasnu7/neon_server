@@ -56,7 +56,10 @@ async def ai_command(payload: dict):
     # DEBUG PAYLOAD KEYS (Security: Don't print values)
     print(f"DEBUG: /director/ai/command Payload Keys: {list(payload.keys())}")
     if client_keys:
-        print(f"DEBUG: Found API Keys for: {list(client_keys.keys())}")
+        safe_log = {k: f"{v[:8]}..." if v else "EMPTY" for k, v in client_keys.items()}
+        print(f"DEBUG: 🔑 KEYS RECEIVED: {safe_log}")
+    else:
+        print("DEBUG: ⚠️ NO API KEYS IN PAYLOAD")
     else:
         print("DEBUG: NO API KEY FOUND IN PAYLOAD")
 

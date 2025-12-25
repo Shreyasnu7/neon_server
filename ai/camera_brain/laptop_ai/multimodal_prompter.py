@@ -29,7 +29,7 @@ class MockLLM:
     async def chat(self, system, user, provider="gemini", api_keys={}):
         pass
 
-async def ask_gpt(user_text, vision_context=None, images=None, video_link=None, memory=None, timeout=15):
+async def ask_gpt(user_text, vision_context=None, images=None, video_link=None, memory=None, timeout=15, api_keys={}):
     """
     Sends a multimodal prompt using the ADVANCED SHOT INTENT REASONER if available.
     Supports DeepSeek for ultra-low latency if configured.
@@ -42,12 +42,12 @@ async def ask_gpt(user_text, vision_context=None, images=None, video_link=None, 
                 # Determine Provider
                 if USE_LOCAL_LLM:
                     # DeepSeek / Local Mode
-                    api_key = DEEPSEEK_API_KEY
+                    api_key = api_keys.get("deepseek") or DEEPSEEK_API_KEY
                     url = f"{DEEPSEEK_URL}/chat/completions"
                     model = "deepseek-chat"
                 else:
                     # Generic OpenAI Mode
-                    api_key = OPENAI_API_KEY
+                    api_key = api_keys.get("openai") or OPENAI_API_KEY
                     url = "https://api.openai.com/v1/chat/completions"
                     model = OPENAI_MODEL
 
