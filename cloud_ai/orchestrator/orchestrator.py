@@ -69,10 +69,17 @@ class CloudOrchestrator:
         # We assume image URLs or base64 are passed in 'images'
         vision_refs = images if images else []
         
+        # Extract Provider from Brain Context (default to gemini)
+        # brain_context is passed from ai_command_router as 'config'
+        target_provider = "gemini"
+        if brain_context and isinstance(brain_context, dict):
+            target_provider = brain_context.get("provider", "gemini")
+
         raw_intent = self.reasoner.reason(
             user_text=text,
             image_refs=vision_refs,
             memory_context={"laptop_brain": brain_context or {}}, # Deep wiring
+            provider=target_provider, # Pass the dynamic provider
             api_keys=api_keys or {} # Pass the dict directly
         )
 

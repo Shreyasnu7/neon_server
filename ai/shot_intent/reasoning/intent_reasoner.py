@@ -56,7 +56,17 @@ class ShotIntentReasoner:
                 "risk_tolerance": 0.0, # Safe fallback
                 "shot_type": "hover",  # Safe fallback
                 "action": "HOVER",     # REQUIRED BY SCHEMA
-                "reasoning": "Fallback: AI Service Unavailable."
+                "reasoning": "Fallback: AI Offline (No Response)"
             }
 
-        return json.loads(response)
+        # Parse Response
+        try:
+             data = json.loads(response)
+             # If "reasoning" starts with "System:", it's likely a mock error from llm.py
+             # We should trust it even if it was a mock-up
+             return data
+        except:
+             return {
+                "action": "HOVER",
+                "reasoning": "Fallback: JSON Parse Error from AI"
+             }
