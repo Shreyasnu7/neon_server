@@ -92,6 +92,10 @@ class CloudOrchestrator:
             api_keys=api_keys or {} # Pass the dict directly
         )
 
+        # DEBUG: INJECT INPUT TEXT FOR TRACING
+        if isinstance(raw_intent, dict):
+             raw_intent["debug_input_text"] = text
+
         # DEBUG: FORCE REASONING VISIBILITY
         if raw_intent and "reasoning" not in raw_intent:
             raw_intent["reasoning"] = f"Raw LLM Output (No Reason Provide): {str(raw_intent)}"

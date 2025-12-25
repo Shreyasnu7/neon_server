@@ -25,7 +25,7 @@ class ExecutionPlanner:
             # SCHEMA COMPLIANCE (api_schemas.DronePlan)
             "action": maneuver["type"], 
             "target": shot_intent.get("target_subject"), # "red car"
-            "reasoning": str(shot_intent.get("reasoning", "EXECUTING AUTONOMOUS MANEUVER")).upper(),
+            "reasoning": f"IN[{shot_intent.get('debug_input_text', '?')}]: {str(shot_intent.get('reasoning', 'EXECUTING AUTONOMOUS MANEUVER')).upper()}",
             "style": shot_intent.get("camera_movement", "Standard"),
             
             "constraints": {
@@ -40,7 +40,7 @@ class ExecutionPlanner:
         Translates Abstract Intent -> Concrete Maneuver Primitive
         """
         # AI Output: shot_type (ORBIT, FOLLOW, DOLLY, HOVER)
-        stype = intent.get("shot_type", "HOVER").upper()
+        stype = intent.get("shot_type", "ERROR").upper()
         energy = intent.get("motion_energy", 0.5)
         
         if stype == "ORBIT":
@@ -61,10 +61,16 @@ class ExecutionPlanner:
                  "vector": {"x": 1.0, "y": 0.0, "z": 0.2}, 
                  "duration": 10.0
              }
-        else:
+        elif stype == "HOVER":
              return {
                 "type": "HOVER",
                 "look_at_subject": True
+             }
+        else:
+             # UNKNOWN / ERROR
+             return {
+                 "type": "ERROR",
+                 "reason": "Unknown shot type or AI Failure"
              }
              
     def _energy_to_speed(self, energy: float) -> float:
