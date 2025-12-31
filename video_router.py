@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Response, UploadFile, File
 from fastapi.responses import StreamingResponse
 import asyncio
-from ai.camera_brain.laptop_ai.director_core import Director
+# from ai.camera_brain.laptop_ai.director_core import Director (Removed: Laptop Only)
 
 router = APIRouter()
 
@@ -31,12 +31,11 @@ async def ensure_director_started():
 @router.post("/video/frame")
 async def upload_frame(file: UploadFile = File(...)):
     global _latest_frame
-    global _latest_frame
     _latest_frame = await file.read()
     
-    # Lazy Start the Brain on first frame
-    if _director is None:
-         asyncio.create_task(ensure_director_started())
+    # NOTE: We do NOT start the Director here. 
+    # The Laptop AI runs externally and consumes/commands via WS.
+    # The Server is strictly a relay.
          
     return {"status": "ok"}
 
