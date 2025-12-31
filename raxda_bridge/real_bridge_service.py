@@ -519,6 +519,78 @@ class RadxaBridge:
                 # print(f"ESP RX Error: {e}")
                 await asyncio.sleep(0.1)
 
+    async def telemetry_loop(self):
+        """
+        CRITICAL: Reads FC MAVLink streams (Attitude, GPS, Battery) 
+        and relays to Cloud. Also enforces Battery Failsafe.
+        """
+        print("📡 Telemetry Loop Started")
+        while self.running and self.fc:
+            try:
+                # Read specific messages (non-blocking)
+                msg = self.fc.recv_match(
+                    type=['ATTITUDE', 'GLOBAL_POSITION_INT', 'SYS_STATUS', 'VFR_HUD'], 
+                    blocking=False
+                )
+                if msg:
+                    # Update Cache
+                    if msg.get_type() == 'ATTITUDE':
+                        self.telemetry_cache['roll'] = msg.roll
+                        self.telemetry_cache['pitch'] = msg.pitch
+                        self.telemetry_cache['yaw'] = msg.yaw
+                    elif msg.get_type() == 'GLOBAL_POSITION_INT':
+                        self.telemetry_cache['lat'] = msg.lat / 1e7
+                        self.telemetry_cache['lng'] = msg.lon / 1e7
+                        self.telemetry_cache['alt'] = msg.relative_alt / 1000.0 # Meters
+                    elif msg.get_type() == 'VFR_HUD':
+                        self.telemetry_cache['speed'] = msg.groundspeed
+                        self.telemetry_cache['heading'] = msg.heading
+                    elif msg.get_type() == 'SYS_STATUS':
+                        batt = msg.battery_remaining # %
+                        self.telemetry_cache['bat'] = batt
+                        
+                        # --- BATTERY FAILSAFE (User Request) ---
+                        threshold = getattr(self, 'batt_threshold', 15)
+                        if batt != -1 and batt < threshold:
+                            # Debounce to prevent panic on voltage sag
+                            if self.telemetry_cache.get('low_batt_counter', 0) > 50: # 5 seconds
+                                print(f"⚠ LOW BATTERY FAILSAFE ({batt}%) -> TRIGGERING RTL")
+                                self.fc.mav.command_long_send(
+                                    self.fc.target_system, self.fc.target_component,
+                                    mavutil.mavlink.MAV_CMD_NAV_RETURN_TO_LAUNCH, 0, 0, 0, 0, 0, 0, 0, 0)
+                                # Reset counter to avoid spamming (or keep spamming ensures it happens)
+                                self.telemetry_cache['low_batt_counter'] = 0 
+                            else:
+                                self.telemetry_cache['low_batt_counter'] = self.telemetry_cache.get('low_batt_counter', 0) + 1
+                        else:
+                             self.telemetry_cache['low_batt_counter'] = 0
+
+                # Rate Limit Relay to Cloud (10Hz)
+                if self.ws and (time.time() - getattr(self, 'last_telem_send', 0) > 0.1):
+                    # Construct Payload
+                    payload = {
+                        "roll": self.telemetry_cache.get('roll', 0),
+                        "pitch": self.telemetry_cache.get('pitch', 0),
+                        "yaw": self.telemetry_cache.get('yaw', 0),
+                        "lat": self.telemetry_cache.get('lat', 0),
+                        "lng": self.telemetry_cache.get('lng', 0),
+                        "alt": self.telemetry_cache.get('alt', 0),
+                        "speed": self.telemetry_cache.get('speed', 0),
+                        "bat": self.telemetry_cache.get('bat', 100),
+                        "distance": self.telemetry_cache.get('lidar_dist', 0) # Merged Lidar Data
+                    }
+                    await self.ws.send(json.dumps({
+                        "type": "telemetry",
+                        "payload": payload
+                    }))
+                    self.last_telem_send = time.time()
+                
+                await asyncio.sleep(0.01) # Poll fast
+                
+            except Exception as e:
+                # print(f"Telem Error: {e}")
+                await asyncio.sleep(0.1)
+
     # Missing Method: Validate Auto Action
     # This was called in command_loop (line 368) but self.safety was not init.
     # To fix fully without relying on external class import complexity, I'll inline the logic or stub it if I missed copying the SafetyCircuit class.
@@ -564,7 +636,8 @@ if __name__ == "__main__":
             bridge.connect_cloud(),
             bridge.video_loop(),
             bridge.lidar_loop(),
-            bridge.esp32_listener() # Added ESP32 Listener
+            bridge.esp32_listener(),
+            bridge.telemetry_loop() # ADDED CRITICAL TELEMETRY LOOP
         )
     
     loop.run_until_complete(main_wrapper())
