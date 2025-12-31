@@ -217,10 +217,10 @@ class RealLLMClient:
         # User strictly requested gemini-3.0-flash.
         # FOUND IN LOGS: 'models/gemini-3-flash-preview', 'models/gemini-2.5-flash', etc.
         models_to_try = [
-            'gemini-3-flash-preview',      # exact match from logs
-            'gemini-2.5-flash',            # fallback 1
-            'gemini-2.0-flash',            # fallback 2
-            'gemini-flash-latest'          # generic fallback
+            'gemini-1.5-flash',            # Working standard
+            'gemini-1.5-pro',              # Fallback high quality
+            'gemini-pro',                  # Legacy
+            'gemini-1.0-pro'               # Legacy specific
         ]
         
         # FORCE CONFIGURATION (Fix for 'No API_KEY' error)

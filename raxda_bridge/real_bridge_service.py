@@ -12,7 +12,7 @@ import os
 # UART2 on Radxa Zero 3W (Pins 8/10)
 FC_PORT = '/dev/ttyS1' 
 FC_BAUD = 57600
-SERVER_URL = "wss://drone-server-r0qe.onrender.com/ws/RADXA_X" 
+SERVER_URL = "wss://drone-server-r0qe.onrender.com/ws/connect/RADXA_X" 
 # HTTP URL for Video Push
 API_URL = "https://drone-server-r0qe.onrender.com" 
 
@@ -410,7 +410,7 @@ class RadxaBridge:
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cam_config['h'])
         cap.set(cv2.CAP_PROP_FPS, self.cam_config['fps'])
         
-        url = SERVER_URL.replace("ws://", "http://").replace("wss://", "https://").replace("/ws/RADXA_X", "/video/frame")
+        url = SERVER_URL.replace("ws://", "http://").replace("wss://", "https://").replace("/ws/connect/RADXA_X", "/video/frame")
         
         print(f"📷 Video Stream Started: Source={current_source} (Index {current_idx}) -> {url}")
         

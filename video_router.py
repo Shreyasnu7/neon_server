@@ -22,7 +22,10 @@ async def ensure_director_started():
         _director = Director(client_id="server_brain", simulate=False)
         _director.set_frame_source(get_latest_frame)
         # Scan '1000 files' or init heavy models here
-        await _director.start() # Connects to Msg Client
+        try:
+             await _director.start() # Connects to Msg Client
+        except Exception as e:
+             print(f"⚠️ Director Start Error (Video will continue): {e}")
 
 
 @router.post("/video/frame")

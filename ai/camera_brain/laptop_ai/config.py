@@ -3,6 +3,7 @@ import os
 
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Server Config
 VPS_WS = os.getenv("VPS_WS", "wss://drone-server-r0qe.onrender.com/ws")
