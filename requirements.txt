@@ -8,3 +8,5 @@ google-generativeai
 sqlalchemy
 psycopg2-binary
 opencv-python-headless
+ultralytics
+pillow
