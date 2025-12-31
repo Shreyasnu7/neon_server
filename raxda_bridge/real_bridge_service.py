@@ -389,7 +389,17 @@ class RadxaBridge:
                                     "payload": {"level": "critical", "msg": f"OBSTACLE {min_dist:.1f}m"}
                                 }))
 
-                        # 2. Stream Data to AI (for Path Planning)
+                        # 2. RELAY TO FC (MAVLink DISTANCE_SENSOR) - CRITICAL FOR OA
+                        # We send the closest point as a simple proximity sensor
+                        # Real implementations send multiple sectors.
+                        if self.fc:
+                             try:
+                                self.fc.mav.distance_sensor_send(
+                                    0, 10, 150, int(min_dist * 100), 0, 1, 0, 0
+                                )
+                             except: pass
+
+                        # 3. Stream Data to AI (for Path Planning)
                         # Rate limit to 5Hz to save bandwidth
                         if self.ws and (time.time() - getattr(self, 'last_lidar_send', 0) > 0.2):
                              await self.ws.send(json.dumps({
