@@ -1,6 +1,8 @@
 import os
 
+
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Server Config
 VPS_WS = os.getenv("VPS_WS", "wss://your-render-app.onrender.com/ws")
