@@ -57,8 +57,9 @@ async def get_drones() -> List[Dict]:
     # Reverting to: logic that was there: "for client_id in connected_clients.keys():"
     # I will rely on that variable being present.
     
+    
     try:
-        from main import connected_clients
+        from ws_router import connected_clients
         for client_id in connected_clients.keys():
             if "drone" in client_id.lower() or "vision" in client_id.lower():
                 drones.append({
@@ -97,3 +98,28 @@ async def get_media(request: Request):
              files.append({"url": url, "type": ftype, "date": date_str})
              
     return files
+
+@router.post("/command")
+async def generic_command(payload: Dict):
+    """
+    Relays generic APP commands (set_rth, etc.) to connected drones.
+    Input: {"command": "set_rth_alt", "payload": {"alt": 5000}}
+    """
+    from ws_router import connected_clients
+    import json
+    
+    cmd = payload.get("command")
+    data = payload.get("payload")
+    
+    # Broadcast to all 'radxa' or 'brain' clients
+    count = 0
+    msg = json.dumps({"type": "ai", "payload": {"action": cmd, **(data if data else {})}})
+    
+    for cid, sock in connected_clients.items():
+        if "radxa" in cid.lower() or "drone" in cid.lower():
+             try:
+                 await sock.send_text(msg)
+                 count += 1
+             except: pass
+             
+    return {"status": "dispatched", "drones_reached": count}
