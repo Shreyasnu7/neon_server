@@ -280,7 +280,8 @@ class RadxaBridge:
                                         ts = int(time.time())
                                         fname = f"snap_{ts}.jpg"
                                         cv2.imwrite(fname, frame)
-                                        print(f"✅ Saved {fname}")
+                                        print(f"✅ Saved {fname} locally.")
+                                        asyncio.create_task(self.upload_file(fname)) # UPLOAD
                             else:
                                 print(f"📡 Triggering External Camera ({self.cam_config.get('source')})...")
                         
@@ -289,7 +290,8 @@ class RadxaBridge:
                             self.recording = True
                             if self.cam_config.get('source') == 'internal':
                                 ts = int(time.time())
-                                self.rec_out = cv2.VideoWriter(f'rec_{ts}.avi', cv2.VideoWriter_fourcc(*'MJPG'), 30, (640,480))
+                                self.rec_filename = f'rec_{ts}.avi' # Store filename
+                                self.rec_out = cv2.VideoWriter(self.rec_filename, cv2.VideoWriter_fourcc(*'MJPG'), 30, (640,480))
                         
                         elif cmd_val == 'stop_recording':
                             print("uq STOP RECORDING")
@@ -297,6 +299,9 @@ class RadxaBridge:
                             if self.rec_out:
                                 self.rec_out.release()
                                 self.rec_out = None
+                                print(f"✅ Recording Finished: {getattr(self, 'rec_filename', 'unknown')}")
+                                if hasattr(self, 'rec_filename'):
+                                    asyncio.create_task(self.upload_file(self.rec_filename)) # UPLOAD
 
                     elif type == 'gimbal':
                         pitch = payload.get('pitch', 0)
@@ -519,33 +524,94 @@ class RadxaBridge:
                 # print(f"ESP RX Error: {e}")
                 await asyncio.sleep(0.1)
 
+    async def upload_file(self, filepath, endpoint="/media/upload"):
+        """Uploads a file to the server"""
+        if not os.path.exists(filepath): return
+        
+        url = API_URL + endpoint
+        print(f"📡 Uploading {filepath} to {url}...")
+        try:
+            async with aiohttp.ClientSession() as session:
+                with open(filepath, 'rb') as f:
+                    data = aiohttp.FormData()
+                    data.add_field('file', f, filename=os.path.basename(filepath))
+                    async with session.post(url, data=data) as resp:
+                        if resp.status == 200:
+                            print(f"✅ Upload Complete: {filepath}")
+                        else:
+                            print(f"❌ Upload Failed: {resp.status}")
+        except Exception as e:
+            print(f"❌ Upload Error: {e}")
+
     async def telemetry_loop(self):
         """
         CRITICAL: Reads FC MAVLink streams (Attitude, GPS, Battery) 
         and relays to Cloud. Also enforces Battery Failsafe.
         """
         print("📡 Telemetry Loop Started")
+        
+        # Flight Stats Tracking
+        flight_active = False
+        start_time = 0
+        max_alt = 0
+        max_speed = 0
+        start_bat = 0
+        
         while self.running and self.fc:
             try:
                 # Read specific messages (non-blocking)
                 msg = self.fc.recv_match(
-                    type=['ATTITUDE', 'GLOBAL_POSITION_INT', 'SYS_STATUS', 'VFR_HUD'], 
+                    type=['ATTITUDE', 'GLOBAL_POSITION_INT', 'SYS_STATUS', 'VFR_HUD', 'HEARTBEAT'], 
                     blocking=False
                 )
                 if msg:
+                    type_ = msg.get_type()
+                    
+                    # ARMING STATUS CHECK (for Flight Logs)
+                    if type_ == 'HEARTBEAT':
+                        armed = (msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED) > 0
+                        if armed and not flight_active:
+                             print("🛫 FLIGHT STARTED: Log recording...")
+                             flight_active = True
+                             start_time = time.time()
+                             max_alt = 0
+                             max_speed = 0
+                             start_bat = self.telemetry_cache.get('bat', 100)
+                        elif not armed and flight_active:
+                             print("🛬 FLIGHT ENDED: Saving Log...")
+                             flight_active = False
+                             duration = time.time() - start_time
+                             # Upload Log
+                             log_data = {
+                                 "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+                                 "duration": f"{int(duration // 60)}m {int(duration % 60)}s",
+                                 "max_alt": round(max_alt, 1),
+                                 "max_speed": round(max_speed, 1),
+                                 "battery_used": round(start_bat - self.telemetry_cache.get('bat', start_bat), 1),
+                                 "location": f"{self.telemetry_cache.get('lat',0):.4f}, {self.telemetry_cache.get('lng',0):.4f}"
+                             }
+                             # Async Upload
+                             asyncio.create_task(self._upload_log(log_data))
+
                     # Update Cache
-                    if msg.get_type() == 'ATTITUDE':
+                    if type_ == 'ATTITUDE':
                         self.telemetry_cache['roll'] = msg.roll
                         self.telemetry_cache['pitch'] = msg.pitch
                         self.telemetry_cache['yaw'] = msg.yaw
-                    elif msg.get_type() == 'GLOBAL_POSITION_INT':
+                    elif type_ == 'GLOBAL_POSITION_INT':
                         self.telemetry_cache['lat'] = msg.lat / 1e7
                         self.telemetry_cache['lng'] = msg.lon / 1e7
-                        self.telemetry_cache['alt'] = msg.relative_alt / 1000.0 # Meters
-                    elif msg.get_type() == 'VFR_HUD':
-                        self.telemetry_cache['speed'] = msg.groundspeed
+                        alt = msg.relative_alt / 1000.0
+                        self.telemetry_cache['alt'] = alt
+                        if flight_active and alt > max_alt: max_alt = alt
+                        
+                    elif type_ == 'VFR_HUD':
+                        speed = msg.groundspeed
+                        self.telemetry_cache['speed'] = speed
                         self.telemetry_cache['heading'] = msg.heading
-                    elif msg.get_type() == 'SYS_STATUS':
+                        if flight_active and speed > max_speed: max_speed = speed
+
+                    elif type_ == 'SYS_STATUS':
                         batt = msg.battery_remaining # %
                         self.telemetry_cache['bat'] = batt
                         
@@ -590,6 +656,15 @@ class RadxaBridge:
             except Exception as e:
                 # print(f"Telem Error: {e}")
                 await asyncio.sleep(0.1)
+
+    async def _upload_log(self, log_data):
+         url = API_URL + "/logs"
+         print(f"📜 Uploading Flight Log: {log_data}")
+         try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=log_data) as resp:
+                     if resp.status == 200: print("✅ Log Saved.")
+         except Exception as e: print(f"❌ Log Error: {e}")
 
     # Missing Method: Validate Auto Action
     # This was called in command_loop (line 368) but self.safety was not init.

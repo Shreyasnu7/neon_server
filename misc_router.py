@@ -97,7 +97,31 @@ async def get_media(request: Request):
              
              files.append({"url": url, "type": ftype, "date": date_str})
              
+             files.append({"url": url, "type": ftype, "date": date_str})
+             
     return files
+
+@router.post("/media/upload")
+async def upload_media(file: UploadFile = File(...)):
+    """
+    Accepts photo/video uploads from Radxa/Drone.
+    Saves to 'media/' directory.
+    """
+    import os
+    import shutil
+    
+    media_dir = "media"
+    if not os.path.exists(media_dir):
+        os.makedirs(media_dir, exist_ok=True)
+        
+    file_location = os.path.join(media_dir, file.filename)
+    try:
+        with open(file_location, "wb+") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        print(f"✅ Media Uploaded: {file.filename}")
+        return {"status": "ok", "filename": file.filename}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @router.post("/command")
 async def generic_command(payload: Dict):
