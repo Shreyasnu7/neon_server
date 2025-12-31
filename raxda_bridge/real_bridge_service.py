@@ -99,7 +99,33 @@ class RadxaBridge:
                 print(f"⚠️ FC Connection Failed: {e}. Retrying in 5s...")
                 await asyncio.sleep(5)
 
-# ... (Previous Code)
+                await asyncio.sleep(5)
+
+    async def connect_cloud(self):
+        """Maintains WebSocket connection to Cloud Server"""
+        while self.running:
+            try:
+                print(f"☁ Connecting to Cloud: {SERVER_URL}")
+                # Extra headers or auth if needed
+                async with websockets.connect(SERVER_URL, ping_interval=10, ping_timeout=20) as ws:
+                    self.ws = ws
+                    print("✅ Cloud Connected!")
+                    
+                    # Handshake / Auth if required by server? 
+                    # Server expects token? "auth_token": "dev_token_123"
+                    await ws.send(json.dumps({
+                        "type": "auth", 
+                        "token": "dev_token_123", # Hardcoded dev token matching config.py
+                        "device_id": "RADXA_X"
+                    }))
+                    
+                    # Start Command Listener
+                    await self.command_loop() 
+                    
+            except Exception as e:
+                print(f"❌ Cloud Disconnected: {e}")
+                self.ws = None
+                await asyncio.sleep(3) # Retry delay
 
     async def command_loop(self):
         """Listens for commands from Cloud"""
@@ -301,6 +327,17 @@ class RadxaBridge:
                              )
                              seq += 1
                         print("✅ Mission Upload Complete")
+                        
+                        # SIMULATION: Auto-Complete Mission after 30s (for UX demo)
+                        # Real implementation needs to listen to MISSION_ITEM_REACHED
+                        async def sim_mission_end():
+                            await asyncio.sleep(30)
+                            if self.ws:
+                                await self.ws.send(json.dumps({
+                                    "type": "alert",
+                                    "payload": {"level": "info", "msg": "MISSION_COMPLETE (Simulated)"}
+                                }))
+                        asyncio.create_task(sim_mission_end())
                     
             except Exception as e:
                 print(f"RX Error: {e}")
@@ -373,7 +410,7 @@ class RadxaBridge:
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cam_config['h'])
         cap.set(cv2.CAP_PROP_FPS, self.cam_config['fps'])
         
-        url = SERVER_URL.replace("ws://", "http://").replace("wss://", "https://").replace("/ws/RADXA_X", "/video_push")
+        url = SERVER_URL.replace("ws://", "http://").replace("wss://", "https://").replace("/ws/RADXA_X", "/video/frame")
         
         print(f"📷 Video Stream Started: Source={current_source} (Index {current_idx}) -> {url}")
         

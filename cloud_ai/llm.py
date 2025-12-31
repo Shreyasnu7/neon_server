@@ -217,12 +217,10 @@ class RealLLMClient:
         # User strictly requested gemini-3.0-flash.
         # FOUND IN LOGS: 'models/gemini-3-flash-preview', 'models/gemini-2.5-flash', etc.
         models_to_try = [
-            'gemini-3-flash-preview',      # CONFIRMED VALID: Latest Preview
-            'gemini-2.0-flash-exp',        # 2.0 Preview
-            'gemini-1.5-flash',            # Current Standard Fast
-            'gemini-1.5-pro',              # Current Standard Smart
-            'gemini-pro',                  # Legacy
-            'gemini-1.5-flash-latest'      # Fallback
+            'gemini-3-flash-preview',      # exact match from logs
+            'gemini-2.5-flash',            # fallback 1
+            'gemini-2.0-flash',            # fallback 2
+            'gemini-flash-latest'          # generic fallback
         ]
         
         # FORCE CONFIGURATION (Fix for 'No API_KEY' error)
@@ -230,7 +228,6 @@ class RealLLMClient:
             print(f"DEBUGGING LLM: Configuring GenAI with key (Length: {len(api_key)})")
             genai.configure(api_key=api_key)
         
-        last_exception = "No Check Performed"
         for model_name in models_to_try:
             try:
                 print(f"DEBUGGING LLM: Trying Model: {model_name}")
@@ -240,12 +237,11 @@ class RealLLMClient:
             except Exception as e:
                 print(f"DEBUGGING LLM: Failed {model_name} -> {e}")
                 logger.error(f"Gemini {model_name} Error: {e}")
-                last_exception = str(e)
                 # Try next model for ANY error (Auth, 404, etc) to ensure we find a working one
                 continue
         
         # If all failed
-        raise Exception(f"All Gemini Models Failed. Last Error: {last_exception}")
+        raise Exception("All Gemini Models Failed")
 
     def _call_openai(self, system: str, user: str, client=None) -> str:
         try:

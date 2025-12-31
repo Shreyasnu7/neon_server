@@ -5,9 +5,9 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Server Config
-VPS_WS = os.getenv("VPS_WS", "wss://your-render-app.onrender.com/ws")
+VPS_WS = os.getenv("VPS_WS", "wss://drone-server-r0qe.onrender.com/ws")
 AUTH_TOKEN = os.getenv("AUTH_TOKEN", "dev_token_123")
-API_BASE = os.getenv("API_BASE", "https://your-render-app.onrender.com")
+API_BASE = os.getenv("API_BASE", "https://drone-server-r0qe.onrender.com")
 
 # YOLO model path (we default to yolov8n.pt). Put the .pt file in laptop_ai/ or change path.
 YOLO_MODEL_PATH = "yolov8n.pt"
