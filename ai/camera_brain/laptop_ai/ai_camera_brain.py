@@ -33,11 +33,11 @@ import cv2
 
 # Import AI modules implemented previously
 # Import AI modules implemented previously
-from ai_autofocus import AIAutofocus
-from ai_exposure_engine import AIExposureEngine
-from ai_stabilizer import AIStabilizer
-from ai_scene_classifier import SceneClassifier
-from ai_color_engine import AIColorEngine
+from laptop_ai.ai_autofocus import AIAutofocus
+from laptop_ai.ai_exposure_engine import AIExposureEngine
+from laptop_ai.ai_stabilizer import AIStabilizer
+from laptop_ai.ai_scene_classifier import SceneClassifier
+from laptop_ai.ai_color_engine import AIColorEngine
 
 
 class AICameraBrain:

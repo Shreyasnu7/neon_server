@@ -14,7 +14,7 @@ API_BASE = os.getenv("API_BASE", "https://drone-server-r0qe.onrender.com")
 YOLO_MODEL_PATH = "yolov8n.pt"
 
 # RTSP / camera input for laptop (set to your Radxa RTSP or local camera index)
-RTSP_URL = "rtsp://YOUR_VPS_IP:8554/drone_feed"  # set to actual stream or "0" for local webcam.
+RTSP_URL = "https://drone-server-r0qe.onrender.com/video_feed"  # HTTP Stream from Server Relay
 
 # Performance config
 AI_CALL_INTERVAL = 4.0   # seconds between full AI cloud calls for same job

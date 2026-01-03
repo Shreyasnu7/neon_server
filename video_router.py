@@ -31,7 +31,13 @@ async def ensure_director_started():
 @router.post("/video/frame")
 async def upload_frame(file: UploadFile = File(...)):
     global _latest_frame
-    _latest_frame = await file.read()
+    # Format Check
+    if file.content_type not in ["image/jpeg", "image/png"]:
+        print(f"⚠️ Video Upload: Invalid Content Type {file.content_type}")
+    
+    content = await file.read()
+    _latest_frame = content
+    print(f"📸 Frame Rx: {len(content)} bytes")
     
     # NOTE: We do NOT start the Director here. 
     # The Laptop AI runs externally and consumes/commands via WS.
@@ -46,6 +52,9 @@ async def frame_generator():
             # MJPEG Format
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + _latest_frame + b'\r\n')
+            # print("Sent Frame", end='\r') # Debug noise
+        else:
+             print("⚠️ No Frame in Buffer (Generator)", end='\r')
         await asyncio.sleep(0.05) # Max 20 FPS to save bandwidth
 
 @router.get("/video_feed")

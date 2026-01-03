@@ -30,17 +30,17 @@ from typing import Optional
 
 # Local modules (ensure these files exist or produce them next)
 # Local modules (ensure these files exist or produce them next)
-from camera_fusion import CameraFusion
-from gopro_driver import GoProDriver
-from ai_camera_brain import AICameraBrain
-from camera_selector import choose_camera_for_request
-from messaging_client import MessagingClient
-from vision_tracker import VisionTracker
-from multimodal_prompter import ask_gpt
-from cinematic_planner import to_safe_primitive
-from ultra_director import UltraDirector
-from memory_client import read_memory, write_memory
-from config import RTSP_URL, AI_CALL_INTERVAL, FRAME_SKIP, TEMP_ARTIFACT_DIR, OPENAI_API_KEY
+from laptop_ai.camera_fusion import CameraFusion
+from laptop_ai.gopro_driver import GoProDriver
+from laptop_ai.ai_camera_brain import AICameraBrain
+from laptop_ai.camera_selector import choose_camera_for_request
+from laptop_ai.messaging_client import MessagingClient
+from laptop_ai.vision_tracker import VisionTracker
+from laptop_ai.multimodal_prompter import ask_gpt
+from laptop_ai.cinematic_planner import to_safe_primitive
+from laptop_ai.ultra_director import UltraDirector
+from laptop_ai.memory_client import read_memory, write_memory
+from laptop_ai.config import RTSP_URL, AI_CALL_INTERVAL, FRAME_SKIP, TEMP_ARTIFACT_DIR, OPENAI_API_KEY
 
 # Safety configuration (tweak to your hardware / rules)
 MAX_FRAME_WAIT = 2.0            # seconds to wait to get a frame
@@ -50,7 +50,7 @@ DEBUG_SAVE_FRAME = True
 os.makedirs(TEMP_ARTIFACT_DIR, exist_ok=True)
 
 class Director:
-    def __init__(self, client_id="laptop", simulate: bool = False):
+    def __init__(self, client_id="laptop_brain", simulate: bool = False):
         """
         simulate: if True, never send plans to real VPS target "drone"; instead log them.
         """
@@ -127,16 +127,25 @@ class Director:
         try:
             # 1) Grab a context frame from RTSP (non-blocking with timeout)
             frame = await asyncio.to_thread(self._grab_frame, RTSP_URL, MAX_FRAME_WAIT)
+            
+            vision_context = None
             if frame is None:
-                print("No frame available — returning a conservative HOVER primitive.")
-                primitive = {"action": "HOVER", "params": {}}
-                await self._send_plan(job_id, user_id, drone_id, primitive, reason="no_frame")
-                return
+                print("⚠️ No frame available — BLIND MODE ACTIVE (User Override).")
+                # Do NOT return Hover. Proceed with empty context.
+                vision_context = {"objects": [], "tracks": [], "blind": True}
+            else:
+                # Save debug artifact
+                if DEBUG_SAVE_FRAME:
+                    fname = os.path.join(TEMP_ARTIFACT_DIR, f"job_{job_id}_ctx.jpg")
+                    cv2.imwrite(fname, frame)
 
-            # Save debug artifact
-            if DEBUG_SAVE_FRAME:
-                fname = os.path.join(TEMP_ARTIFACT_DIR, f"job_{job_id}_ctx.jpg")
-                cv2.imwrite(fname, frame)
+                # 2) Vision context (tracks, selected, velocities)
+                vision_context, annotated = await asyncio.to_thread(self.tracker.process_frame, frame)
+
+                # optional save annotated frame
+                if DEBUG_SAVE_FRAME:
+                    fname = os.path.join(TEMP_ARTIFACT_DIR, f"job_{job_id}_annot.jpg")
+                    cv2.imwrite(fname, annotated)
 
             # 2) Vision context (tracks, selected, velocities)
             vision_context, annotated = await asyncio.to_thread(self.tracker.process_frame, frame)

@@ -21,6 +21,7 @@ import time
 from typing import Dict, Tuple
 import numpy as np
 import cv2
+import cv2
 
 def simple_awb_grayworld(bgr):
     # Gray-world white balance correction
@@ -39,7 +40,18 @@ def simple_awb_grayworld(bgr):
 
 class AIColorEngine:
     def __init__(self):
-        self.lut_catalog = ["cine_soft", "cine_flat", "vivid_boost"]  # placeholders
+        self.lut_catalog = ["cine_soft", "cine_flat", "vivid_boost"] 
+        self.load_user_luts() # Scan for User's "1000 Files"
+
+    def load_user_luts(self):
+        """Scans for user-provided .cube / .h5 files"""
+        import os
+        asset_dir = os.path.join(os.path.dirname(__file__), "ai_pipeline", "assets")
+        if os.path.exists(asset_dir):
+            for f in os.listdir(asset_dir):
+                if f.endswith(('.cube', '.h5')):
+                     self.lut_catalog.append(f)
+            print(f"🎨 Loaded {len(self.lut_catalog)} Cinematic Styles (User + Built-in)")
 
     def analyze(self, frame: np.ndarray) -> Dict:
         """
@@ -81,7 +93,6 @@ class AIColorEngine:
             "ts": time.time()
         }
 
-    def apply_grade(self, frame: np.ndarray, grade: Dict) -> np.ndarray:
         """
         Apply a light grade: AWB + contrast + saturation (fast)
         This is a lightweight, real-time-friendly grading.
