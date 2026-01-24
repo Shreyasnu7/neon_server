@@ -1,13 +1,23 @@
+
 fastapi
 uvicorn
 pydantic
 python-multipart
 websockets
 requests
-google-generativeai
+google-generativeai==0.7.2
+openai
+python-dotenv
+httpx
+aiohttp
+# Only headless OpenCV for server side basic ops (if strictly needed)
+opencv-python-headless
+# Database Support
 sqlalchemy
 psycopg2-binary
-opencv-python-headless
+passlib[bcrypt]
+
+# AI / YOLO (Removed: Runs on Laptop)
+# Hardware Bridge
+pymavlink
 ultralytics
-pillow
-aiohttp

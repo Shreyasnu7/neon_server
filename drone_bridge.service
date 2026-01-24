@@ -1,0 +1,15 @@
+[Unit]
+Description=Ultra Drone Bridge Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/mnt/sd_storage/drone_project
+ExecStart=/usr/bin/python3 raxda_bridge/real_bridge_service.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
