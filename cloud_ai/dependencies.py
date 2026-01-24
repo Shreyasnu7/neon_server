@@ -1,4 +1,4 @@
-from cloud_ai.orchestrator import Orchestrator
+from cloud_ai.orchestrator import CloudOrchestrator as Orchestrator
 
 _orchestrator = Orchestrator()
 
